@@ -1,0 +1,12 @@
+# 依赖与构建产物
+node_modules/
+dist/
+.vite/
+
+# 本地环境
+*.local
+*.log
+.DS_Store
+
+# WorkBuddy 工作区数据（项目记忆等，保留在磁盘上但不入库）
+.workbuddy/
