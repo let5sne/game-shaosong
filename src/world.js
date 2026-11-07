@@ -9,6 +9,7 @@ import {
   makeLabelTexture, drawLabel, makeFlagMaterial,
   pineGeometry, broadGeometry, rockGeometry, tentGeometry, mountainClusterGeometry,
 } from './models.js';
+import { createInkPass, makeContactInk } from './ink.js';
 
 const W = 116, D = 100, CX = -2, CZ = -3;
 const WATER_Y = 0.42;
@@ -186,7 +187,7 @@ function mergeAll(list) {
 }
 
 // ── 主场景 ──────────────────────────────────────────────────
-export function createWorld(container, state, { onPick, quality = 'high', reducedMotion = false } = {}) {
+export function createWorld(container, state, { onPick, quality = 'high', reducedMotion = false, ink = true } = {}) {
   const low = quality === 'low';            // 低配：DPR 封顶 1、关阴影、植被采样减半
   const still = !!reducedMotion;            // 系统「减弱动效」：波光、旗面、飞鸟静止
   const dprCap = low ? 1 : 2;
@@ -208,6 +209,9 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
   renderer.shadowMap.enabled = !low;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   container.appendChild(renderer.domElement);
+
+  // 宣纸增强：一次全屏后处理 + 贴地墨晕。?ink=0 可整层旁路，用于 A/B 对比。
+  const inkPass = createInkPass(renderer, { enabled: ink });
 
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.target.set(0, 0, -3);
@@ -269,6 +273,15 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
   land.receiveShadow = true;
   scene.add(land);
   geo.dispose();
+
+  // 接触墨晕：贴合 heightAt 的圆盘，24 城合并为 1 个 draw call，
+  // 给城池「压在纸上」的重量感（原有 shadowMap 只有方向性投影）。
+  const contactInk = makeContactInk(CITY_DEFS, heightAt, {
+    radius: def => 3.4 + (cityTier(def) === 2 ? 1.2 : 0),
+    opacity: low ? 0.22 : 0.32,
+  });
+  contactInk.visible = ink;
+  scene.add(contactInk);
 
   // ── 海面 + 流动波光 ──
   // 起伏放到 vertex shader：原先每帧在 CPU 改 957 个顶点并重传整个 VBO
@@ -777,7 +790,7 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
       if (k >= 1) { scene.remove(f.mesh); f.mesh.material.dispose(); fx.splice(i, 1); }
     }
 
-    renderer.render(scene, camera);
+    inkPass.render(scene, camera);
     // 光源与城池均为静态，阴影贴图烘一次即可，省掉每帧一遍深度渲染
     if (!shadowBaked) { shadowBaked = true; renderer.shadowMap.autoUpdate = false; }
   }
@@ -805,5 +818,14 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
 
   update(state);
 
-  return { update, setSelection, focusCity, resetCamera, march, shock, resize, camera, controls, renderer, scene, quality };
+  // 可在运行时整层开关，便于同一局面／同一相机做 A/B 截图
+  const inkCtl = {
+    get enabled() { return inkPass.enabled; },
+    setEnabled(on) { inkPass.setEnabled(on); contactInk.visible = !!on; },
+    setStrength(s) { inkPass.setStrength(s); },
+    info() { return { enabled: inkPass.enabled, ...inkPass.info() }; },
+    dispose() { inkPass.dispose(); },
+  };
+
+  return { update, setSelection, focusCity, resetCamera, march, shock, resize, camera, controls, renderer, scene, quality, ink: inkCtl };
 }
