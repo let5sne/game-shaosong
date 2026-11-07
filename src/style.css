@@ -416,6 +416,37 @@ kbd { font-family: var(--sans); font-size: 10px; padding: 1px 5px; border: 1px s
 .fc-parts { margin-top: 4px; padding-top: 4px; border-top: 1px dashed var(--line); font-size: 9.5px; line-height: 1.65; color: var(--muted); }
 .forecast .card-note { margin-top: 9px; }
 
+/* ── 战法、驻节、粮道与津渡 ───────────────────────────── */
+.art-line { margin: -3px 0 8px; padding: 7px 9px; background: rgba(185,146,76,.10); border: 1px solid rgba(185,146,76,.28); }
+.art-line b { display: block; font-family: var(--serif); font-size: 13px; color: #8a6a28; letter-spacing: 1px; }
+.art-line span { display: block; margin-top: 2px; font-size: 10px; line-height: 1.6; color: var(--ink-2); }
+.station-line { margin: 0 0 9px; padding: 6px 9px; font-size: 10px; line-height: 1.6; color: var(--muted); border-left: 2px solid var(--line); background: rgba(90,76,50,.05); }
+.station-line.on { color: #7a3a2c; border-left-color: var(--red); background: rgba(168,57,47,.08); }
+.station-line b { font-family: var(--serif); font-size: 12px; }
+.hero-meta { color: #8a6a28; }
+.city-tags span.supply-tag.ok { border-color: rgba(90,126,86,.55); color: #42663f; background: rgba(90,126,86,.10); }
+.city-tags span.supply-tag.cut { border-color: var(--red); color: var(--red); background: rgba(168,57,47,.11); }
+.city-tags span.ford-tag { border-color: rgba(77,134,166,.55); color: #37657c; background: rgba(77,134,166,.10); }
+.city-stats b.txt { font-family: inherit; font-size: 12.5px; }
+.city-stats b.warn { color: var(--red); }
+.station-btn {
+  display: flex; align-items: center; justify-content: space-between; width: 100%;
+  margin: 0 0 11px; padding: 7px 10px; font-family: var(--serif); font-size: 12px;
+  color: #7a3a2c; background: rgba(168,57,47,.09); border: 1px dashed rgba(168,57,47,.5); transition: .16s;
+}
+.station-btn em { font-family: inherit; font-style: normal; font-size: 10px; color: var(--muted); }
+.station-btn:hover:not(:disabled) { background: var(--red); color: #fff5e4; border-style: solid; }
+.station-btn:hover:not(:disabled) em { color: #f0d9c0; }
+.station-btn.active { background: rgba(185,146,76,.16); border: 1px solid var(--gold); color: #8a6a28; }
+.station-btn:disabled { opacity: .6; cursor: default; }
+.link-chip.ford { border-bottom: 2px solid #5b92ad; }
+.link-chip u { text-decoration: none; font-size: 9px; color: #37657c; margin-left: 3px; }
+.link-chip:hover u { color: #fff; }
+.fc-head em { font-style: normal; font-size: 9px; padding: 1px 4px; border-radius: 2px; white-space: nowrap; }
+.fc-head em.fc-cross { color: #fff; background: #4d86a6; }
+.fc-head em.fc-iso { color: #fff; background: #7d5a3c; }
+.fc-head em.fc-station { color: #fff; background: var(--red); }
+
 /* ── 响应式 ───────────────────────────────────────────── */
 @media (max-width: 1380px) {
   .panel-left { width: 258px; }

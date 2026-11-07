@@ -39,33 +39,106 @@ export const CITY_DEFS = [
 /** 河流：控制点 [x, z]，宽度，名称 */
 export const RIVERS = [
   {
-    name: '黄河', color: 0xb98c4a, width: 1.5,
+    id: 'huanghe', name: '黄河', color: 0xb98c4a, width: 1.5,
     points: [[-48,-20],[-36,-18],[-27,-16],[-19,-15],[-8,-14],[1,-12],[7,-9],[13,-5],[19,-1],[24,4],[31,8],[40,10],[48,11]],
   },
   {
-    name: '淮河', color: 0x5c93a8, width: 1.0,
+    id: 'huaihe', name: '淮河', color: 0x5c93a8, width: 1.0,
     points: [[-48,6],[-36,7],[-24,8],[-12,8],[-2,8],[5,8],[13,9],[21,10],[29,10],[38,11],[48,12]],
   },
   {
-    name: '长江', color: 0x4d86a6, width: 1.8,
+    id: 'changjiang', name: '长江', color: 0x4d86a6, width: 1.8,
     points: [[-48,19],[-36,20],[-25,19],[-16,20],[-7,21],[3,22],[12,23],[20,22],[27,21],[35,22],[42,23],[48,23]],
   },
   {
-    name: '钱塘', color: 0x5c93a8, width: 0.7,
+    id: 'qiantang', name: '钱塘', color: 0x5c93a8, width: 0.7,
     points: [[-48,31],[-30,31],[-8,31],[8,31],[19,32],[28,32],[38,33],[48,33]],
   },
 ];
 
-/** 名将 / 朝臣：任命一人为都督，提供战场加成并牵动朝局 */
+/**
+ * 渡口官道：两州之间的通路需涉水者。key 为两城 id 排序后以 | 相连。
+ * 之所以用显式边表而非几何求交：河流在此是斜向且黄河夺淮，纯几何会
+ * 把「楚州→徐州」同时判成渡淮又渡黄，反而失了史地本意。
+ */
+export const CROSSINGS = {
+  'chuzhou|xuzhou': 'huaihe',
+  'chuzhou|haizhou': 'huaihe',
+  'caizhou|shouchun': 'huaihe',
+  'shouchun|xiangyang': 'huaihe',
+  'dengzhou|xiangyang': 'huaihe',
+  'kaifeng|xuzhou': 'huanghe',
+  'caizhou|kaifeng': 'huanghe',
+  'kaifeng|yingtian': 'huanghe',
+  'luoyang|taiyuan': 'huanghe',
+  'changan|luoyang': 'huanghe',
+  'jiankang|yangzhou': 'changjiang',
+  'jiankang|luzhou': 'changjiang',
+  'jiankang|zhenjiang': 'changjiang',
+  'ezhou|jiankang': 'changjiang',
+  'ezhou|xiangyang': 'changjiang',
+  'yangzhou|zhenjiang': 'changjiang',
+  'mingzhou|pingjiang': 'qiantang',
+};
+
+/** 返回两城之间所渡之河（数据对象），无则 null；与方向无关 */
+export function riverBetween(a, b) {
+  if (!a || !b) return null;
+  const key = [a.id, b.id].sort().join('|');
+  const id = CROSSINGS[key];
+  return id ? (RIVERS.find(r => r.id === id) || null) : null;
+}
+
+/**
+ * 名将 / 朝臣：任命一人为都督，提供全局攻势并牵动朝局。
+ * art 是「战法」——只在相应地形、渡河、守城、补给等具体情境下生效，
+ * 故八人不再只是攻势数字高低：平原用岳飞、水网用韩世忠、山险用吴玠。
+ *   terrain  按「目标城地形」给攻势加成
+ *   river    减免渡河惩罚的比例（0~1）
+ *   defend   全军守势加成
+ *   cap      兵额加成   supply 孤军惩罚减免   income 粮赋加成
+ */
 export const HEROES = [
-  { id: 'yuefei',   name: '岳飞',   title: '统制',   faction: '主战', martial: 9, politics: 4, desc: '治军严整，所部不扰民。拜为都督，全军攻势大振。', atk: 0.28, morale: 8,  zhanDelta: 8 },
-  { id: 'hanshizhong', name: '韩世忠', title: '节度使', faction: '主战', martial: 8, politics: 5, desc: '久历行阵，善守淮上。拜为都督，守土与反击俱佳。', atk: 0.20, morale: 6,  zhanDelta: 6 },
-  { id: 'liqi',     name: '刘锜',   title: '都统制', faction: '武将', martial: 8, politics: 3, desc: '顺昌城下曾挫金人锐气，善以少击众。', atk: 0.22, morale: 5,  zhanDelta: 4 },
-  { id: 'wujie',    name: '吴玠',   title: '经略使', faction: '武将', martial: 7, politics: 5, desc: '关陕柱石，据险固守，可安西陲。', atk: 0.16, morale: 6,  zhanDelta: 3 },
-  { id: 'zhangjun', name: '张俊',   title: '节度使', faction: '武将', martial: 6, politics: 7, desc: '兵多而骄，用之可壮声势，然耗费粮饷。', atk: 0.12, morale: 2,  zhanDelta: 2, upkeep: 3 },
-  { id: 'ligang',   name: '李纲',   title: '宰相',   faction: '主战', martial: 3, politics: 9, desc: '主战最力，理政有条，可使朝论归一。', atk: 0.08, morale: 4,  zhanDelta: 12, decree: 1 },
-  { id: 'zhaoding', name: '赵鼎',   title: '参政',   faction: '士林', martial: 3, politics: 8, desc: '持重老成，能稳民心、丰漕运。', atk: 0.05, morale: 3,  zhanDelta: 3, grainBonus: 6 },
-  { id: 'qinhui',   name: '秦桧',   title: '学士',   faction: '主和', martial: 1, politics: 9, desc: '自北南归，力主和议。用之可缓兵，然主战之气必挫。', atk: -0.10, morale: -6, zhanDelta: -18, heDelta: 18, goldBonus: 8 },
+  {
+    id: 'yuefei', name: '岳飞', title: '统制', faction: '主战', martial: 9, politics: 4,
+    desc: '治军严整，所部不扰民。背嵬步阵最利于平原决战。', atk: 0.28, morale: 8, zhanDelta: 8,
+    art: { short: '步阵', name: '背嵬步阵', desc: '平原攻势 +20%，守势 +4%', terrain: { plain: 0.20, river: 0.06 }, defend: 0.04 },
+  },
+  {
+    id: 'hanshizhong', name: '韩世忠', title: '节度使', faction: '主战', martial: 8, politics: 5,
+    desc: '久历行阵，善守淮上。舟师渡水，几无阻滞。', atk: 0.20, morale: 6, zhanDelta: 6,
+    art: { short: '水师', name: '淮上水师', desc: '渡河之阻减免 85%，舟师济师 +10%，守势 +10%', terrain: { river: 0.28, coast: 0.12 }, river: 0.85, amphibious: 0.10, defend: 0.10 },
+  },
+  {
+    id: 'liqi', name: '刘锜', title: '都统制', faction: '武将', martial: 8, politics: 3,
+    desc: '顺昌城下曾挫金人锐气，善以少击众、婴城固守。', atk: 0.22, morale: 5, zhanDelta: 4,
+    art: { short: '城守', name: '顺昌城守', desc: '全军守势 +20%，利于据城挫敌', terrain: { plain: 0.06, river: 0.08 }, defend: 0.20 },
+  },
+  {
+    id: 'wujie', name: '吴玠', title: '经略使', faction: '武将', martial: 7, politics: 5,
+    desc: '关陕柱石，据险固守；孤军悬于敌后亦能自持。', atk: 0.16, morale: 6, zhanDelta: 3,
+    art: { short: '据险', name: '关陕据险', desc: '山险攻势 +30%，孤军之弊减免 65%，守势 +10%', terrain: { mountain: 0.30 }, defend: 0.10, supply: 0.65 },
+  },
+  {
+    id: 'zhangjun', name: '张俊', title: '节度使', faction: '武将', martial: 6, politics: 7,
+    desc: '兵多而骄，用之可壮声势，然耗费粮饷。', atk: 0.12, morale: 2, zhanDelta: 2, upkeep: 3,
+    art: { short: '众兵', name: '行营众兵', desc: '各城兵额 +25%，平原小有增益', terrain: { plain: 0.08 }, cap: 0.25 },
+  },
+  {
+    id: 'ligang', name: '李纲', title: '宰相', faction: '主战', martial: 3, politics: 9,
+    desc: '主战最力，理政有条，可使朝论归一。', atk: 0.08, morale: 4, zhanDelta: 12, decree: 1,
+    art: { short: '庙算', name: '庙堂定算', desc: '守势 +6%，粮赋 +6%，另加一道政令', defend: 0.06, income: 0.06 },
+  },
+  {
+    id: 'zhaoding', name: '赵鼎', title: '参政', faction: '士林', martial: 3, politics: 8,
+    desc: '持重老成，能稳民心、丰漕运。粮道虽远亦不匮。', atk: 0.05, morale: 3, zhanDelta: 3, grainBonus: 6,
+    art: { short: '漕运', name: '漕运足食', desc: '粮赋 +14%，孤城不受粮道之困', supply: 1.0, income: 0.14 },
+  },
+  {
+    id: 'qinhui', name: '秦桧', title: '学士', faction: '主和', martial: 1, politics: 9,
+    desc: '自北南归，力主和议。用之可缓兵，然主战之气必挫。', atk: -0.10, morale: -6, zhanDelta: -18, heDelta: 18, goldBonus: 8,
+    art: { short: '和议', name: '南自南、北自北', desc: '军备废弛，全军守势 -5%', defend: -0.05 },
+  },
 ];
 
 /** 事件卡：cond 决定可否出现，once 表示全局仅一次 */

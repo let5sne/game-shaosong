@@ -10,7 +10,8 @@
  *   2) 用兵节律：每回合至多两度进军、两处整军；
  *   3) 攻城留余量：期望攻守比不足阈值便先蓄势，不赌运气。
  */
-import { battleParams } from './rules.js';
+import { HEROES, riverBetween } from './data.js';
+import { battleParams, marchCost, marchDecree, troopCap, GEO } from './rules.js';
 
 export const BEST_HERO = 'yuefei';
 
@@ -58,10 +59,51 @@ export function battleOdds(s, from, to) {
   const P = battleParams(s, from, to, 'song', send);
   return {
     send,
-    cost: Math.round(send * 1.6),
+    cost: marchCost(s, from, to, send),
+    decreeCost: marchDecree(s, from, to),
     // >1 表示期望上可破城；双方各有 ±20% 随机，故实际阈值还要留余量
     ratio: P.atkBase / P.defBase,
+    cross: P.cross,
+    isolated: P.isolated,
   };
+}
+
+/**
+ * 择将而任：统计当前可攻目标的地形与涉水情形，逐员估算战法收益。
+ * 平原多用岳飞、水网多用韩世忠、山险多用吴玠——不再是固定一将到底。
+ */
+export function bestHero(s, phase = phaseOf(s)) {
+  const bias = PHASE_BIAS[phase] || {};
+  const targets = [];
+  for (const from of s.songCities) {
+    for (const id of from.links) {
+      const to = s.cities[id];
+      if (to.owner !== 'jin' || bias[to.id] === 0) continue;
+      targets.push({ from, to, weight: (bias[to.id] ?? 1) * (STRATEGIC_VALUE[to.id] ?? 8) });
+    }
+  }
+  if (!targets.length) return BEST_HERO;
+  const totalW = targets.reduce((n, t) => n + t.weight, 0) || 1;
+  let best = BEST_HERO, top = -Infinity;
+  for (const h of HEROES) {
+    const gain = targets.reduce((n, { from, to, weight }) => n + weight * (
+      (h.art?.terrain?.[to.terrain] || 0)
+      + (riverBetween(from, to)
+        ? -GEO.crossAtk * (h.art?.river || 0) + (h.art?.amphibious || 0)
+          - 0.10 * (1 - (h.art?.river || 0))   // 无水师则每渡一次多耗一道政令
+        : 0)
+    ), 0) / totalW;
+    const score = h.atk + gain + (h.decree || 0) * 0.05 + (h.zhanDelta || 0) * 0.003;
+    if (score > top) { top = score; best = h.id; }
+  }
+  return best;
+}
+
+/** 驻节之地：优先选当前最有把握出兵的前线城，使战法加倍落到实处 */
+export function bestStation(s, opts = []) {
+  const from = opts[0]?.from || s.frontCities.slice().sort((a, b) => b.troops - a.troops)[0]?.id;
+  if (from && s.cities[from]?.owner === 'song') return from;
+  return s.frontCities[0]?.id || s.songCities[0]?.id || null;
 }
 
 function attackOptions(s, phase) {
@@ -75,7 +117,7 @@ function attackOptions(s, phase) {
       const weight = bias[to.id];
       if (weight === 0) continue;
       const o = battleOdds(s, from, to);
-      if (s.grain < o.cost || s.decree < 1) continue;
+      if (s.grain < o.cost || s.decree < o.decreeCost) continue;
       out.push({
         from: from.id, to: to.id, ...o,
         value: (STRATEGIC_VALUE[to.id] ?? 8) * (weight ?? 1),
@@ -87,10 +129,9 @@ function attackOptions(s, phase) {
   return out;
 }
 
-const troopCap = c => Math.max(12, Math.round(c.yieldGrain * 2.8));
 const canTrain = (s, c, ctx) => c && c.owner === 'song' && ctx.trains < TRAIN_LIMIT
   && s.decree >= 1 && s.grain >= 18 && s.gold >= 12
-  && c.lastTrainTurn !== s.turn && c.troops < troopCap(c);
+  && c.lastTrainTurn !== s.turn && c.troops < troopCap(s, c);
 
 /** 春、夏金骑北还，是北伐窗口；秋、冬则须厚集边防 */
 const isWindowSeason = s => (s.turn - 1) % 4 < 2;
@@ -130,32 +171,44 @@ export function chooseAction(s, ctx = newTurnContext(s)) {
   if (s.over || s.pendingEvent || s.decree <= 0) return null;
   if (ctx.turn !== s.turn) Object.assign(ctx, newTurnContext(s));
 
-  // 一、开局拜都督：岳飞攻势 +28%，主战 +8，是本局最重要的第一步
-  if (s.heroId !== BEST_HERO && s.turn <= 2 && s.decree >= 2) {
-    return { type: 'hero', id: BEST_HERO, desc: `拜岳飞为都督诸军事，诸军攻势 +28%` };
+  // 一、择将而任：渡淮阶段重水师，转入中原平原则改任步阵；
+  //    阶段转折时准许换将一次，但距上次拜将须隔六回合，免得朝令夕改。
+  const phase = ctx.phase;
+  const wantHero = bestHero(s, phase);
+  const opening = s.turn <= 3;
+  const turnPoint = phase !== '固淮北' && s.turn - (s.heroTurn || 0) >= 6;
+  if (s.heroId !== wantHero && (opening || turnPoint) && s.decree >= (opening ? 2 : 4)) {
+    const h = HEROES.find(x => x.id === wantHero);
+    const why = opening ? '以应淮上水势' : '中原平原，宜改步阵';
+    return { type: 'hero', id: wantHero, desc: `拜${h.name}为都督，领「${h.art?.name}」——${why}` };
   }
 
-  const phase = ctx.phase;
   const opts = attackOptions(s, phase);
   const canMarch = ctx.marches < MARCH_LIMIT;
   const ready = canMarch ? opts.find(o => o.ratio >= ATTACK_THRESHOLD) : null;
   const best = opts[0] || null;
 
-  // 二、粮为军命：进军需粮甚巨，先立仓廪
+  // 二、都督驻节：战法在本城加倍，只费一道政令，是本局性价比最高的一步
+  if (!s.heroCity && s.hero && s.decree >= 2) {
+    const city = bestStation(s, opts);
+    if (city) return { type: 'dujun', city, desc: `都督持节驻${s.cities[city].name}，本路战法加倍、城守益固` };
+  }
+
+  // 三、粮为军命：进军需粮甚巨，先立仓廪
   if (s.grain < 44 && s.decree >= 2) {
     return { type: 'chouliang', desc: `仓廪将竭，遣转运使督办粮纲` };
   }
-  // 三、民心既关粮赋，亦系败亡
+  // 四、民心既关粮赋，亦系败亡
   if (s.popularity < 38 && s.grain >= 15 && s.decree >= 2) {
     return { type: 'anfu', desc: `民心浮动，减免两浙赋役以固根本` };
   }
 
-  // 四、有必胜之战而未亲征，先树黄旗：本回合攻势再 +25%
+  // 五、有必胜之战而未亲征，先树黄旗：本回合攻势再 +25%
   if ((ready || (best && best.ratio >= 0.95)) && !s.charge && s.decree >= 3) {
     return { type: 'qinzheng', desc: `御驾亲征，本回合诸军攻势 +25%` };
   }
 
-  // 五、攻城
+  // 六、攻城
   if (ready) {
     return {
       type: 'jinjun', from: ready.from, to: ready.to, attack: true,
@@ -163,7 +216,7 @@ export function chooseAction(s, ctx = newTurnContext(s)) {
     };
   }
 
-  // 六、力有未逮，则先厚集兵力：挑「再进一步便能破城」的方向蓄势
+  // 七、力有未逮，则先厚集兵力：挑「再进一步便能破城」的方向蓄势
   const hopeful = opts.filter(o => o.ratio > 0.72).sort((a, b) => b.ratio - a.ratio)[0] || best;
   if (hopeful && canMarch) {
     const from = s.cities[hopeful.from];
@@ -171,24 +224,31 @@ export function chooseAction(s, ctx = newTurnContext(s)) {
       return { type: 'zhengjun', city: hopeful.from, desc: `${from.name}整军，为取${s.cities[hopeful.to].name}蓄势` };
     }
     const rf = s.decree >= 2 ? reinforceOption(s, hopeful.from) : null;
-    if (rf && s.grain >= Math.round(Math.floor(s.cities[rf.from].troops * 0.7) * 1.6)) {
-      return { type: 'jinjun', from: rf.from, to: rf.to, desc: `自${s.cities[rf.from].name}移防 ${rf.gain} 营实${s.cities[rf.to].name}边` };
+    if (rf) {
+      const f = s.cities[rf.from], t = s.cities[rf.to];
+      const send = Math.floor(f.troops * 0.7);
+      if (s.grain >= marchCost(s, f, t, send) && s.decree >= marchDecree(s, f, t)) {
+        return { type: 'jinjun', from: rf.from, to: rf.to, desc: `自${f.name}移防 ${rf.gain} 营实${t.name}边` };
+      }
     }
   }
 
-  // 七、秋冬金骑南下，最弱的前线州郡须补兵，谨防长驱入江
+  // 八、秋冬金骑南下，最弱的前线州郡须补兵，谨防长驱入江
   if (!isWindowSeason(s) || !best) {
     const weak = weakestFront(s);
     if (weak && weak.troops < 10 && canTrain(s, weak, ctx) && s.decree >= 2) {
       return { type: 'zhengjun', city: weak.id, desc: `${weak.name}当金骑之冲，增兵固守` };
     }
     const rf = weak && weak.troops < 7 && s.decree >= 2 ? reinforceOption(s, weak.id) : null;
-    if (rf && s.grain >= 40) {
-      return { type: 'jinjun', from: rf.from, to: rf.to, desc: `调${s.cities[rf.from].name}之兵赴${s.cities[rf.to].name}，以备秋冬` };
+    if (rf) {
+      const f = s.cities[rf.from], t = s.cities[rf.to];
+      if (s.grain >= 40 && s.decree >= marchDecree(s, f, t)) {
+        return { type: 'jinjun', from: rf.from, to: rf.to, desc: `调${f.name}之兵赴${t.name}，以备秋冬` };
+      }
     }
   }
 
-  // 八、余政令尽作积贮：粮、民心、兵额，按紧缺程度取一
+  // 九、余政令尽作积贮：粮、民心、兵额，按紧缺程度取一
   if (s.decree >= 1) {
     if (s.grain < 95) return { type: 'chouliang', desc: `积谷以备北伐` };
     if (s.popularity < 62 && s.grain >= 15) return { type: 'anfu', desc: `存问生民，以固粮赋` };
@@ -233,6 +293,7 @@ export function applyAction(s, a, ctx) {
   let ok = false;
   switch (a.type) {
     case 'hero': ok = s.renming(a.id); break;
+    case 'dujun': ok = s.dujun(a.city); break;
     case 'qinzheng': ok = s.qinzheng(); break;
     case 'chouliang': ok = s.chouliang(); break;
     case 'anfu': ok = s.anfu(); break;

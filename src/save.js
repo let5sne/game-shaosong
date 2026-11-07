@@ -12,7 +12,7 @@ const VERSION = 1;
 
 const FIELDS = [
   'turn', 'grain', 'gold', 'popularity', 'morale', 'court',
-  'heroId', 'gearBonus', 'jinFury', 'jinMight', 'charge', 'truce', 'famine',
+  'heroId', 'heroCity', 'heroTurn', 'gearBonus', 'jinFury', 'jinMight', 'charge', 'truce', 'famine',
   'lastCaptureTurn', 'logs', 'over', 'decree', 'lastBattle',
   'difficulty', 'maxTurns', 'seed', 'random', 'variant',
 ];
@@ -48,6 +48,11 @@ export function restore(state, raw) {
   if (!state.variant) state.variant = { seed: state.seed || 0, notes: [] };
   // 旧档或异常档的兜底：不要让难度参数缺失导致战斗系数 NaN
   if (!Number.isFinite(state.jinMight)) state.jinMight = 0;
+  // 旧档没有督军驻节与粮道缓存，补齐即可续玩
+  if (state.heroCity === undefined) state.heroCity = null;
+  if (state.heroCity && state.cities[state.heroCity]?.owner !== 'song') state.heroCity = null;
+  state._supplyKey = null;
+  state._supply = null;
   return true;
 }
 

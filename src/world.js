@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { CITY_DEFS, RIVERS } from './data.js';
+import { CITY_DEFS, RIVERS, riverBetween } from './data.js';
+import { supplyMap } from './rules.js';
 import {
   SONG_COLOR, JIN_COLOR, SONG_LIGHT, JIN_LIGHT, PAPER,
   cityTier, buildCityLibrary, makeFlagTexture, makeWaterTexture,
@@ -310,8 +311,8 @@ export function createWorld(container, state, { onPick }) {
   }));
   glintMesh.renderOrder = 4; scene.add(glintMesh);
 
-  // ── 官道：深色路肩 + 浅色路面，全部合并为 2 个 mesh ──
-  const roadEdge = [], roadBody = [], drawn = new Set();
+  // ── 官道：深色路肩 + 浅色路面；津渡另染水色，全部合并为 4 个 mesh ──
+  const roadEdge = [], roadBody = [], fordEdge = [], fordBody = [], drawn = new Set();
   for (const c of CITY_DEFS) {
     for (const id of c.links) {
       const key = [c.id, id].sort().join('|');
@@ -325,8 +326,9 @@ export function createWorld(container, state, { onPick }) {
         new THREE.Vector3(t.x, 0, t.z),
       ]);
       const pts = curve.getPoints(28);
-      roadEdge.push(ribbonGeometry(pts, 0.29, 0.10, 0x877454));
-      roadBody.push(ribbonGeometry(pts, 0.19, 0.125, 0xc4ad82));
+      const ford = riverBetween(c, t);
+      (ford ? fordEdge : roadEdge).push(ribbonGeometry(pts, ford ? 0.44 : 0.31, 0.10, ford ? 0x2d6183 : 0x877454));
+      (ford ? fordBody : roadBody).push(ribbonGeometry(pts, ford ? 0.30 : 0.20, 0.125, ford ? 0x63b6dd : 0xc4ad82));
     }
   }
   const roadMat = (opacity) => new THREE.MeshBasicMaterial({
@@ -336,6 +338,10 @@ export function createWorld(container, state, { onPick }) {
   roadEdgeMesh.renderOrder = 5; scene.add(roadEdgeMesh);
   const roadBodyMesh = new THREE.Mesh(mergeAll(roadBody), roadMat(0.82));
   roadBodyMesh.renderOrder = 6; scene.add(roadBodyMesh);
+  const fordEdgeMesh = new THREE.Mesh(mergeAll(fordEdge), roadMat(0.72));
+  fordEdgeMesh.renderOrder = 5; scene.add(fordEdgeMesh);
+  const fordBodyMesh = new THREE.Mesh(mergeAll(fordBody), roadMat(0.94));
+  fordBodyMesh.renderOrder = 6; scene.add(fordBodyMesh);
 
   // ── 远山 ──
   const mountains = new THREE.InstancedMesh(
@@ -460,6 +466,10 @@ export function createWorld(container, state, { onPick }) {
     scene.add(selRing);
     const reachRing = groundRingAbs(c.x, c.z, rIn - 0.48, rIn - 0.18, 0xf0d08a, 0);
     scene.add(reachRing);
+    const stationRing = groundRingAbs(c.x, c.z, rIn + 1.22, rIn + 1.58, 0xe8b64b, 0);
+    scene.add(stationRing);
+    const isoRing = groundRingAbs(c.x, c.z, rIn + 0.14, rIn + 0.56, 0x6f3f74, 0);
+    scene.add(isoRing);
 
     const hit = new THREE.Mesh(
       new THREE.SphereGeometry(lib.half * 1.5 + 0.7, 10, 8),
@@ -472,7 +482,7 @@ export function createWorld(container, state, { onPick }) {
     hitMeshes.push(hit);
 
     cityRoot.add(g);
-    cityViews[c.id] = { group: g, solid, faction, flag, label, cv, tex, influence, selRing, reachRing, def, lib };
+    cityViews[c.id] = { group: g, solid, faction, flag, label, cv, tex, influence, selRing, reachRing, stationRing, isoRing, def, lib };
   }
 
   // ── 兵力营帐：全局一个 InstancedMesh，按兵力增减 ──
@@ -608,18 +618,22 @@ export function createWorld(container, state, { onPick }) {
   let selectedId = null;
   let reachable = [];
   function update(s) {
+    const sup = supplyMap(s);
     for (const id in cityViews) {
       const v = cityViews[id];
       const c = s.cities[id];
       const song = c.owner === 'song';
+      const isolated = song && !sup.linked.has(id);
       v.faction.material = matFaction[c.owner];
       v.flag.material = flagMats[c.owner];
-      v.influence.material.color.setHex(song ? SONG_COLOR : JIN_COLOR);
-      v.influence.material.opacity = song ? 0.30 : 0.46;
+      v.influence.material.color.setHex(isolated ? 0x6f5b83 : song ? SONG_COLOR : JIN_COLOR);
+      v.influence.material.opacity = isolated ? 0.70 : song ? 0.30 : 0.46;
       drawLabel(v.cv, c, id === selectedId);
       v.tex.needsUpdate = true;
       v.selRing.material.opacity = id === selectedId ? 0.95 : 0;
       v.reachRing.material.opacity = reachable.includes(id) ? 0.8 : 0;
+      v.stationRing.material.opacity = s.heroCity === id ? 0.85 : 0;
+      v.isoRing.material.opacity = isolated ? 0.82 : 0;
 
       const shown = Math.max(1, Math.min(TENT_SLOTS, Math.ceil(c.troops / 2.4)));
       for (const slot of tentSlots[id]) {

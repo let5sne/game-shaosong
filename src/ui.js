@@ -1,5 +1,5 @@
-import { HEROES, TERRAIN_LABEL, DIFFICULTIES } from './data.js';
-import { previewBattle } from './rules.js';
+import { HEROES, TERRAIN_LABEL, DIFFICULTIES, riverBetween } from './data.js';
+import { previewBattle, supplyMap, troopCap } from './rules.js';
 import { readSave, writeSave, clearSave, saveInfo, restore } from './save.js';
 import {
   chooseAction, applyAction, chooseEvent, newTurnContext, phaseOf,
@@ -91,13 +91,15 @@ const TEMPLATE = `
     <h2>玩法略要</h2>
     <div class="help-grid">
       <section><h3>一、大局</h3><p>靖康之后，宋据江左，金占中原。你每回合有若干<b>政令</b>，用于整军、筹粮、进军、拜将等。点「结束回合」后，度支结算、金军行动、随机事件依次发生。</p></section>
-      <section><h3>二、用兵与推演</h3><p>先点选一座己方州郡，再按「进军」，右栏即列出<b>进兵推演</b>：每个相邻州郡的胜算、攻守势区间、克城后存兵与各项加成，点一行便可下令；州郡索引的城名后也标了胜算。攻金城即攻城战，攻己城为移防。每城每回合只可整军一次，且受<b>兵额</b>所限；克城后损兵甚重，须就地休整。临阵双方各有浮动，胜算并非必胜之数。</p></section>
+      <section><h3>二、用兵与推演</h3><p>先点选一座己方州郡，再按「进军」，右栏即列出<b>进兵推演</b>：每个相邻州郡的胜算、攻守势区间、克城后存兵、政令与粮耗，以及士气／战法／渡河／补给／地形的逐项拆解，点一行便可下令；州郡索引的城名后也标了胜算。攻金城即攻城战，攻己城为移防。每城每回合只可整军一次，且受<b>兵额</b>所限；克城后损兵甚重，须就地休整。临阵双方各有浮动，胜算并非必胜之数。</p></section>
       <section><h3>三、朝局</h3><p>主战威望高则政令多、军心盛；主和过盛则北伐之议渐寝。任命都督会明显改变朝局。民心决定粮赋，士气决定攻势，粮尽则军自溃。</p></section>
       <section><h3>四、胜败</h3><p><b>胜</b>：收复东京开封与燕京（或尽逐金人）。<b>败</b>：临安／建康失守、民心归零、连岁乏粮，或于回合上限内未竟全功。开场页可择<b>三档国势</b>：宽和、本色、艰险，分别改金军兵势、仓廪、回合上限与开局变局；每局另有两条随机变局，局号注于战报与「北伐大计」。</p></section>
       <section><h3>五、操作</h3><p>拖拽旋转舆图、滚轮缩放、右键平移、点选州郡。<kbd>空格</kbd>结束回合，<kbd>Esc</kbd>取消进军，<kbd>H</kbd>打开本页，<kbd>R</kbd>复位视角，<kbd>A</kbd>开关托管推演。局面<b>逐令自动存档</b>，刷新或关机后自开场页「续上一局」接续；终局清档。</p></section>
-      <section><h3>六、节律</h3><p>金骑只在<b>秋、冬</b>南牧，春夏淮上暂宁，正是整军北伐的窗口。先取徐州、蔡州等外围，再图开封；「御驾亲征」叠加都督加成可破坚城。久不北伐则主和日盛——偏安拖不出中兴。</p></section>
+      <section><h3>六、节律</h3><p>金骑只在<b>秋、冬</b>南牧，春夏淮上暂宁，正是整军北伐的窗口。<b>冬季黄河冰合</b>，涉水之阻与据河之利俱减，金骑踏冰可南，须早为之备。先取徐州、蔡州等外围，再图开封；「御驾亲征」叠加都督加成可破坚城。久不北伐则主和日盛——偏安拖不出中兴。</p></section>
       <section><h3>七、托管推演</h3><p>开场页按「托管推演」，或局中按顶栏 <b>▶</b>／<kbd>A</kbd>，便由 AI 代为临朝，逐回合决策，直至克复两京。托管守<b>三段战略</b>：固淮北 → 复旧都 → 取燕云；每回合至多两度进军、两处整军。可暂停、切换 ×1／×3／×8 倍速、随时停止接手。若一局失利会自动重整山河再北伐。</p></section>
       <section><h3>八、推演公允</h3><p>托管与官家用的是<b>同一套规则、同一份粮账、同一个随机数</b>，没有隐藏兵力或暗改判定；它只是把攻守之势算得更准、更不肯冒险。托管中的战报、事件裁断与三维行军，与你亲手所下之令并无二致。</p></section>
+      <section><h3>九、山河与粮道</h3><p>黄河、淮河、长江、钱塘各有<b>津渡</b>。凡涉水进军，攻势受挫、守方据河得利，且须多下<b>一道政令</b>并添舟楫粮耗；<b>水师</b>都督或御驾亲征可免那道政令。州郡须由己方城池连成一线通向行在，方为<b>粮道通</b>；否则即为孤城——岁赋折半、兵额减半、士气渐堕、久戍逃亡，出兵与守备俱受损。相邻己城越多，<b>连营犄角</b>越厚。开局长安便孤悬敌后，唯有打通洛阳、邓州一线方能接上粮道。</p></section>
+      <section><h3>十、战法与督军</h3><p>八位都督各有<b>战法</b>：岳飞步阵利于平原，韩世忠水师济河，吴玠据险擅长山险且能持孤军，刘锜婴城固守，张俊广兵额，李纲、赵鼎理政足食，秦桧则军备废弛。故渡淮之时宜任水师，转入中原平原则改任步阵。择一己方州郡下「<b>督军</b>」令，都督持节驻此：自本城出兵战法加倍，本城守备益固；换将或该城失守，驻节即废。</p></section>
     </div>
     <button class="btn-primary" data-act="close-help">领旨</button>
   </div>
@@ -217,19 +219,20 @@ export function createUI(root, state) {
       const p = previewBattle(s, fromId, id);
       const parts = arr => arr.filter(x => Math.abs(x[1]) > 0.001).map(signed).join(' · ');
       const body = p.kind === 'move'
-        ? `<div class="fc-meta">调 ${p.gain} 营实边 · 耗粮 ${p.cost}</div>`
+        ? `<div class="fc-meta">调 ${p.gain} 营实边 · 耗粮 ${p.cost} · 政令 ${p.decreeCost} 道</div>`
         : `<div class="fc-odds"><div class="fc-bar"><i style="width:${Math.round(p.chance * 100)}%;background:${p.chance >= 0.6 ? '#b5483a' : p.chance >= 0.35 ? '#b9924c' : '#3d4b60'}"></i></div><b>${fmtPct(p.chance)}</b><span>${p.verdict}</span></div>
            <div class="fc-meta">攻势 ${p.atkMin.toFixed(0)}~${p.atkMax.toFixed(0)} · 守势 ${p.defMin.toFixed(0)}~${p.defMax.toFixed(0)}</div>
-           <div class="fc-meta">克城约存 ${p.survivors} 营 · 不利约折 ${p.loss} 营 · 耗粮 ${p.cost}</div>
+           <div class="fc-meta">克城约存 ${p.survivors} 营 · 不利约折 ${p.loss} 营 · 耗粮 ${p.cost} · 政令 ${p.decreeCost} 道</div>
            <div class="fc-parts">${parts(p.atkParts)}<br>${parts(p.defParts)}</div>`;
       return `<button class="fc-row ${p.ok ? '' : 'disabled'}" data-act="pre-march" data-id="${id}" ${p.ok ? '' : 'disabled'} title="${esc(p.reason)}">
-        <div class="fc-head"><b>${esc(to.name)}</b><span class="owner-mini ${to.owner}">${to.owner === 'song' ? '移防' : '攻城'}</span><span class="fc-troops">${to.troops} 营</span></div>
+        <div class="fc-head"><b>${esc(to.name)}</b><span class="owner-mini ${to.owner}">${to.owner === 'song' ? '移防' : '攻城'}</span><span class="fc-troops">${to.troops} 营</span>
+          ${p.cross ? `<em class="fc-cross">渡${esc(p.cross)}</em>` : ''}${p.isolated ? '<em class="fc-iso">孤军</em>' : ''}${p.stationed ? '<em class="fc-station">督</em>' : ''}</div>
         ${body}</button>`;
     }).join('');
     return `<section class="card forecast">
       <div class="card-eyebrow">进兵推演 <span class="decree-pip">自 ${esc(from.name)} 出 ${send} 营</span></div>
       <div class="fc-list">${rows}</div>
-      <p class="card-note">胜算依兵力、士气、都督、亲征与守城地利实算，临阵各有浮动。点一行即下此令；按 <kbd>Esc</kbd> 取消进军可复用军政指令。</p>
+      <p class="card-note">渡河须另备舟楫：多耗一道政令与粮秣，攻势受挫；水师都督或御驾亲征可免政令。孤军无继、连营犄角、都督驻节与战法地形，皆已计入上列胜算。按 <kbd>Esc</kbd> 取消。</p>
     </section>`;
   }
 
@@ -289,22 +292,29 @@ export function createUI(root, state) {
       <section class="card heroes">
         <div class="card-eyebrow">都督诸军事</div>
         <div class="hero-current">${hero ? `<b>${hero.name}</b><span>${hero.title} · 攻势 ${hero.atk >= 0 ? '+' : ''}${Math.round(hero.atk * 100)}%</span>` : '<b>阙员</b><span>未拜都督，诸军不相统属</span>'}</div>
+        ${hero?.art ? `<div class="art-line"><b>${esc(hero.art.name)}</b><span>${esc(hero.art.desc)}</span></div>` : ''}
+        <div class="station-line ${s.heroCity ? 'on' : ''}">${s.heroCity ? `持节驻 <b>${esc(s.cities[s.heroCity]?.name || '—')}</b> · 本路战法 ×1.6、城守 +12%` : '未驻节 · 战法仅得常效，可于州郡面板命其持节'}</div>
         <div class="hero-list">
           ${HEROES.map(h => `
-            <button class="hero-item ${s.heroId === h.id ? 'active' : ''}" data-act="hero" data-id="${h.id}" title="${esc(h.desc)}">
+            <button class="hero-item ${s.heroId === h.id ? 'active' : ''}" data-act="hero" data-id="${h.id}" title="${esc(h.desc)}｜战法：${esc(h.art?.name || '—')} ${esc(h.art?.desc || '')}">
               <span class="hero-name">${h.name}</span>
               <span class="hero-tag ${h.faction === '主和' ? 'he' : h.faction === '主战' ? 'zhan' : ''}">${h.faction}</span>
-              <span class="hero-meta">统 ${h.martial}</span>
+              <span class="hero-meta">${esc(h.art?.short || '')}</span>
             </button>`).join('')}
         </div>
-        <p class="card-note">任命耗政令 1 道，并牵动朝局。</p>
+        <p class="card-note">任命耗政令 1 道并牵动朝局；换将则旧日驻节作废。</p>
       </section>
     `;
 
     const c = selected ? s.cities[selected] : null;
+    const sup = supplyMap(s);
+    const cap = c ? troopCap(s, c) : 0;
+    const fordOf = id => (c ? riverBetween(c, s.cities[id]) : null);
+    const fords = c ? [...new Set(c.links.map(fordOf).filter(Boolean).map(r => r.name))] : [];
+    const linked = c ? sup.linked.has(c.id) : false;
     const can = {
       zhengjun: c && c.owner === 'song' && s.decree >= 1 && s.grain >= 18 && s.gold >= 12
-        && c.lastTrainTurn !== s.turn && c.troops < Math.max(12, Math.round(c.yieldGrain * 2.8)),
+        && c.lastTrainTurn !== s.turn && c.troops < cap,
       march: c && c.owner === 'song' && s.decree >= 1 && s.grain >= 12,
       chouliang: s.decree >= 1,
       anfu: s.decree >= 1 && s.grain >= 15,
@@ -318,17 +328,32 @@ export function createUI(root, state) {
         <div class="card-eyebrow">州郡舆情</div>
         ${c ? `
           <div class="city-head"><h2>${esc(c.name)}</h2><span class="owner ${c.owner}">${c.owner === 'song' ? '宋' : '金'}</span></div>
-          <div class="city-tags"><span>${TERRAIN_LABEL[c.terrain]}</span><span>守险 +${Math.round(({ plain: 0, mountain: 0.35, river: 0.2, coast: 0.1 }[c.terrain]) * 100)}%</span><span>兵额 ${Math.max(12, Math.round(c.yieldGrain * 2.8))}</span>${c.seat ? '<span class="gold">行在</span>' : ''}${c.capitalOfJin ? '<span class="gold">旧都</span>' : ''}</div>
+          <div class="city-tags">
+            <span>${TERRAIN_LABEL[c.terrain]}</span>
+            <span>守险 +${Math.round(({ plain: 0, mountain: 0.35, river: 0.2, coast: 0.1 }[c.terrain]) * 100)}%</span>
+            <span>兵额 ${cap}</span>
+            ${c.seat ? '<span class="gold">行在</span>' : ''}${c.capitalOfJin ? '<span class="gold">旧都</span>' : ''}
+            ${c.owner === 'song' ? `<span class="supply-tag ${linked ? 'ok' : 'cut'}">${linked ? '粮道通' : '孤城无援'}</span>` : ''}
+            ${sup.support[c.id] ? `<span class="supply-tag">连营 ${sup.support[c.id]}</span>` : ''}
+            ${fords.length ? `<span class="ford-tag">${esc(fords.join('·'))}津渡</span>` : ''}
+          </div>
           <div class="city-stats">
             <div><span>驻军</span><b>${c.troops} 营</b></div>
             <div><span>岁赋</span><b>${c.yieldGrain} 粮</b></div>
+            <div><span>粮道</span><b class="txt ${c.owner === 'song' && !linked ? 'warn' : ''}">${c.owner === 'song' ? (linked ? '通行在' : '断绝') : '金据'}</b></div>
+            <div><span>连营</span><b class="txt">${sup.support[c.id] || 0} 处</b></div>
           </div>
-          <div class="link-label">官道所通 <span class="link-legend">· 金城后标胜算</span></div>
+          ${c.owner === 'song' && s.hero ? `
+            <button class="station-btn ${s.heroCity === c.id ? 'active' : ''}" data-act="dujun" data-id="${c.id}" ${s.heroCity === c.id || s.decree < 1 || s.over ? 'disabled' : ''}>
+              ${s.heroCity === c.id ? `✔ ${esc(s.hero.name)}持节驻此` : `命${esc(s.hero.name)}驻节此州`}<em>${s.heroCity === c.id ? '已驻节' : '耗政令 1 道'}</em>
+            </button>` : ''}
+          <div class="link-label">官道所通 <span class="link-legend">· 蓝字为津渡，金城后标胜算</span></div>
           <div class="link-list">${c.links.map(id => {
             const n = s.cities[id];
             const p = c.owner === 'song' && n.owner === 'jin' ? previewBattle(s, c.id, id) : null;
             const cls = !p ? '' : p.chance >= 0.6 ? 'good' : p.chance >= 0.35 ? 'mid' : 'low';
-            return `<button class="link-chip ${n.owner}" data-act="pick" data-id="${id}" ${p ? `title="胜算 ${fmtPct(p.chance)} · ${p.verdict}"` : ''}>${esc(n.name)} <i>${n.troops}</i>${p ? `<em class="odds ${cls}">${fmtPct(p.chance)}</em>` : ''}</button>`;
+            const ford = fordOf(id);
+            return `<button class="link-chip ${n.owner} ${ford ? 'ford' : ''}" data-act="pick" data-id="${id}" title="${ford ? `渡${esc(ford.name)} · ` : ''}${p ? `胜算 ${fmtPct(p.chance)} · ${p.verdict}` : '官道相通'}">${esc(n.name)} <i>${n.troops}</i>${ford ? '<u>渡</u>' : ''}${p ? `<em class="odds ${cls}">${fmtPct(p.chance)}</em>` : ''}</button>`;
           }).join('')}</div>
         ` : `
           <div class="empty-city">
@@ -697,6 +722,7 @@ export function createUI(root, state) {
       sfx('event');
       return;
     }
+    if (act === 'dujun') { state.dujun(btn.dataset.id); sfx('event'); return; }
     if (act === 'cmd') { runCmd(btn.dataset.cmd); return; }
     if (act === 'end-turn') {
       if (state.over || state.pendingEvent) return;
