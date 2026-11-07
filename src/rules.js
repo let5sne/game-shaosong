@@ -1,40 +1,101 @@
-import { CITY_DEFS, HEROES, EVENTS, TERRAIN_DEFENSE, MAX_TURNS } from './data.js';
+import {
+  CITY_DEFS, HEROES, EVENTS, TERRAIN_DEFENSE, TERRAIN_LABEL, DIFFICULTIES,
+} from './data.js';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const rand = (a, b) => a + Math.random() * (b - a);
 const pick = arr => arr[Math.floor(Math.random() * arr.length)];
 
+/** 可复现的开局随机数：同一个局号必得同一份变局 */
+function makeRng(seed) {
+  let t = seed >>> 0;
+  return () => {
+    t += 0x6D2B79F5;
+    let x = Math.imul(t ^ (t >>> 15), 1 | t);
+    x ^= x + Math.imul(x ^ (x >>> 7), 61 | x);
+    return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * 每局抽两条开局变局，写入 state.variant.notes。
+ * easy 偏吉、hard 偏凶、normal 吉凶参半，让「再开一局」不是同一道题。
+ */
+function rollVariant(s, r, luck) {
+  const jinIds = CITY_DEFS.filter(d => d.owner === 'jin').map(d => d.id);
+  const songIds = CITY_DEFS.filter(d => d.owner === 'song').map(d => d.id);
+  const some = list => list[Math.floor(r() * list.length)];
+  const pool = [
+    { tone: 'bad', make: () => { const id = some(jinIds); return {
+      text: `金人重兵屯于${s.cities[id].name}`, apply: () => { s.cities[id].troops += 3; } }; } },
+    { tone: 'bad', make: () => { const id = some(songIds); return {
+      text: `${s.cities[id].name}边备未修`, apply: () => { s.cities[id].troops = Math.max(2, s.cities[id].troops - 2); } }; } },
+    { tone: 'bad', make: () => ({ text: '去岁歉收，仓廪未实', apply: () => { s.grain -= 20; } }) },
+    { tone: 'bad', make: () => ({ text: '朝中苟安之论渐起', apply: () => { s.court.he += 8; s.court.zhan -= 4; } }) },
+    { tone: 'good', make: () => ({ text: '江淮丰稔，仓廪有余', apply: () => { s.grain += 30; } }) },
+    { tone: 'good', make: () => ({ text: '府库充实，缗钱可用', apply: () => { s.gold += 30; } }) },
+    { tone: 'good', make: () => ({ text: '朝中主战之声甚高', apply: () => { s.court.zhan += 8; s.court.he -= 4; } }) },
+    { tone: 'good', make: () => ({ text: '诸军思战，士气颇盛', apply: () => { s.morale += 8; } }) },
+    { tone: 'good', make: () => ({ text: '江南民心可用', apply: () => { s.popularity += 8; } }) },
+    { tone: 'good', make: () => { const ids = [some(jinIds), some(jinIds)]; return {
+      text: '金人内乱，北边兵势稍减', apply: () => { ids.forEach(id => { s.cities[id].troops = Math.max(2, s.cities[id].troops - 2); }); } }; } },
+    { tone: 'mixed', make: () => { const id = some(songIds); return {
+      text: `${s.cities[id].name}旧部尚完`, apply: () => { s.cities[id].troops += 2; } }; } },
+    { tone: 'mixed', make: () => ({ text: '关陕劲旅可用', apply: () => { s.cities.changan.troops += 2; } }) },
+  ];
+  const allowed = luck === 'good' ? pool.filter(v => v.tone !== 'bad')
+    : luck === 'bad' ? pool.filter(v => v.tone !== 'good') : pool;
+  const bag = allowed.slice();
+  const notes = [];
+  while (notes.length < 2 && bag.length) {
+    const v = bag.splice(Math.floor(r() * bag.length), 1)[0].make();
+    v.apply();
+    notes.push(v.text);
+  }
+  return notes;
+}
+
 export class GameState {
-  constructor() {
+  constructor(opts = {}) {
     this.listeners = {};
-    this.reset();
+    this.reset(opts);
   }
 
   on(name, fn) { (this.listeners[name] ||= []).push(fn); return this; }
   emit(name, payload) { (this.listeners[name] || []).forEach(fn => fn(payload)); }
 
-  reset() {
+  reset(opts = {}) {
+    const id = opts.difficulty ?? this.difficulty ?? 'normal';
+    const D = DIFFICULTIES.find(d => d.id === id) || DIFFICULTIES[1];
+    this.difficulty = D.id;
+    this.maxTurns = D.maxTurns;
+    this.jinMight = D.jinMight;
+    this.seed = Number.isFinite(opts.seed) ? opts.seed : (Math.floor(Math.random() * 900000) + 100000);
+    this.random = opts.random !== false;
+
     this.cities = {};
     CITY_DEFS.forEach(d => {
-      this.cities[d.id] = { ...d, troops0: d.troops, owner: d.owner, lastTrainTurn: 0 };
+      this.cities[d.id] = { ...d, links: [...d.links], troops0: d.troops, owner: d.owner, lastTrainTurn: 0 };
     });
     // 补全双向邻接
     Object.values(this.cities).forEach(c => {
-      c.links.forEach(id => {
-        const other = this.cities[id];
+      c.links.forEach(id2 => {
+        const other = this.cities[id2];
         if (other && !other.links.includes(c.id)) other.links.push(c.id);
       });
     });
+    // 难度先落到金军兵额上，之后变局再叠一层
+    if (D.jinTroops) this.jinCities.forEach(c => { c.troops = Math.max(2, c.troops + D.jinTroops); });
 
     this.turn = 1;
-    this.grain = 140;
-    this.gold = 90;
+    this.grain = D.grain;
+    this.gold = D.gold;
     this.popularity = 62;
     this.morale = 58;
-    this.court = { zhan: 58, he: 42 };
+    this.court = { zhan: clamp(58 + D.zhanDelta, 0, 100), he: clamp(42 - D.zhanDelta, 0, 100) };
     this.heroId = null;
     this.gearBonus = 0;
-    this.jinFury = 0;
+    this.jinFury = D.jinFury;
     this.charge = 0;
     this.truce = 0;
     this.famine = 0;
@@ -43,14 +104,19 @@ export class GameState {
     this.pendingEvent = null;
     this.logs = [];
     this.over = null;
-    this.decree = 5;
+    this.decree = 5 + D.decreeBonus;
     this.lastBattle = null;
+    this.variant = { seed: this.seed, notes: [] };
+    if (this.random) this.variant.notes = rollVariant(this, makeRng(this.seed), D.luck);
 
     this.say('建炎之末，行在草创。官家立于江左，北望中原。', 'event');
+    const extra = this.variant.notes.length ? `｜${this.variant.notes.join('，')}` : '';
+    this.say(`【开局】${D.name} · 局号 #${this.seed}${extra}`, 'event');
     this.say('目标：收复东京开封与燕京，重振版籍。', 'info');
   }
 
   // ── 查询 ──────────────────────────────────────────────────
+  get diffDef() { return DIFFICULTIES.find(d => d.id === this.difficulty) || DIFFICULTIES[1]; }
   get hero() { return HEROES.find(h => h.id === this.heroId) || null; }
   get songCities() { return Object.values(this.cities).filter(c => c.owner === 'song'); }
   get jinCities() { return Object.values(this.cities).filter(c => c.owner === 'jin'); }
@@ -100,7 +166,8 @@ export class GameState {
     if (this.popularity <= 30) d -= 1;
     if (hero?.decree) d += hero.decree;
     if (this.court.he >= 80) d -= 1;
-    return clamp(d, 3, 7);
+    d += this.diffDef.decreeBonus || 0;
+    return clamp(d, 3, 8);
   }
 
   // ── 指令 ──────────────────────────────────────────────────
@@ -196,23 +263,12 @@ export class GameState {
     return true;
   }
 
-  /** 战斗判定 */
+  /** 战斗判定：攻守系数由 battleParams 统一提供，战前预估与托管 AI 共用同一份 */
   battle(from, to, send, side) {
     const defenderTroops = to.troops;   // 战报须记战前守军，克城后 to.troops 会被覆盖
-    const hero = side === 'song' ? this.hero : null;
-    const moraleBonus = side === 'song' ? this.morale / 320 : 0.20;
-    const chargeBonus = side === 'song' && this.charge ? 0.25 : 0;
-    const heroBonus = side === 'song' ? (hero?.atk || 0) : 0;
-    const gear = side === 'song' ? this.gearBonus : 0;
-    const zhanBonus = side === 'song' ? (this.court.zhan - this.court.he) / 500 : 0;
-    // 金军锐气：本就剽悍，且随战事推移愈发难挡，逼玩家尽早北伐
-    const fury = side === 'jin' ? 0.18 + 0.035 * this.jinFury + Math.min(0.15, this.turn * 0.006) : 0;
-
-    const atk = send * rand(0.85, 1.20) * (1 + moraleBonus + chargeBonus + heroBonus + gear + zhanBonus + fury);
-    const wall = (to.capitalOfJin || to.capitalOfSong || to.seat ? 0.18 : 0.08)
-      + (to.id === 'kaifeng' || to.id === 'yanjing' ? 0.08 : 0);
-    const terrain = TERRAIN_DEFENSE[to.terrain] || 0;
-    const def = to.troops * rand(0.90, 1.15) * (1 + wall + terrain);
+    const P = battleParams(this, from, to, side, send);
+    const atk = send * rand(0.85, 1.20) * P.atkBonus;
+    const def = to.troops * rand(0.90, 1.15) * P.defBonus;
     const win = atk > def;
 
     let detail = '';
@@ -374,7 +430,7 @@ export class GameState {
     if (this.cities.linan.owner === 'jin' || this.cities.jiankang.owner === 'jin') return this.finish('lose', '江左失守', '行在陷落，朝廷再无立足之地。南渡之局，终究没能翻过来。');
     if (this.popularity <= 0) return this.finish('lose', '民心尽失', '赋重役繁，民不聊生。未待金人渡江，江南已自生乱。');
     if (this.famine >= 3) return this.finish('lose', '仓廪告罄', '连岁乏粮，诸军自溃。北伐之师，未出淮上而先散。');
-    if (this.turn > MAX_TURNS) return this.finish('lose', '偏安江左', '岁月蹉跎，北伐之议终成空谈。史官落笔，仍是一段南渡旧事。');
+    if (this.turn > this.maxTurns) return this.finish('lose', '偏安江左', '岁月蹉跎，北伐之议终成空谈。史官落笔，仍是一段南渡旧事。');
     return null;
   }
 
@@ -391,4 +447,87 @@ export class GameState {
     if (!this.over && !this.pendingEvent) this.checkEnd();
     this.emit('change', this);
   }
+}
+
+/**
+ * 攻守系数的唯一真源：battle() 判定、战前预估、托管 AI 三处共用。
+ * 任一侧的加成改动只在这里发生，避免「AI 算得比玩家准」的隐性不公。
+ */
+export function battleParams(state, from, to, side, send) {
+  const atkParts = [];
+  if (side === 'song') {
+    atkParts.push(['士气', state.morale / 320]);
+    if (state.charge) atkParts.push(['御驾亲征', 0.25]);
+    atkParts.push(['都督', state.hero?.atk || 0]);
+    atkParts.push(['军械', state.gearBonus]);
+    atkParts.push(['朝论', (state.court.zhan - state.court.he) / 500]);
+  } else {
+    atkParts.push(['北骑锐气', 0.20]);
+    atkParts.push(['金军积怒', 0.18 + 0.035 * state.jinFury + Math.min(0.15, state.turn * 0.006)]);
+    if (state.jinMight) atkParts.push(['国势', state.jinMight]);
+  }
+  const atkBonus = 1 + atkParts.reduce((n, p) => n + p[1], 0);
+  const wall = (to.capitalOfJin || to.capitalOfSong || to.seat ? 0.18 : 0.08)
+    + (to.id === 'kaifeng' || to.id === 'yanjing' ? 0.08 : 0);
+  const terrain = TERRAIN_DEFENSE[to.terrain] || 0;
+  const defParts = [['城防', wall], [`${TERRAIN_LABEL[to.terrain] || '地形'}守险`, terrain]];
+  const defBonus = 1 + wall + terrain;
+  void from;
+  return {
+    send, atkBonus, defBonus, atkParts, defParts,
+    atkBase: send * atkBonus,
+    defBase: Math.max(1, to.troops * defBonus),
+  };
+}
+
+/** 攻守各带一次均匀分布抖动，用数值积分求精确胜率；确定性、不掷点 */
+export function winChance(atkBase, defBase) {
+  const u0 = 0.85, u1 = 1.20, v0 = 0.90, v1 = 1.15, N = 240;
+  let sum = 0;
+  for (let i = 0; i < N; i++) {
+    const u = u0 + (i + 0.5) * (u1 - u0) / N;
+    sum += clamp((atkBase * u / Math.max(1, defBase) - v0) / (v1 - v0), 0, 1);
+  }
+  return sum / N;
+}
+
+/**
+ * 战前推演：把 battle() 的算盘摊开给玩家看。
+ * 无论当前是否可行，都会给出胜算与攻守明细；ok/reason 另表此令能否下。
+ */
+export function previewBattle(s, fromId, toId) {
+  const from = s.cities[fromId], to = s.cities[toId];
+  if (!from || !to) return { ok: false, reason: '州郡不详' };
+  if (from.owner !== 'song') return { ok: false, reason: '非己方州郡' };
+  if (!from.links.includes(toId)) return { ok: false, reason: '无官道相通' };
+
+  const send = Math.max(2, Math.floor(from.troops * 0.70));
+  const cost = Math.round(send * 1.6);
+  const r = { from: fromId, to: toId, send, cost, ok: false, reason: '' };
+
+  if (to.owner === 'song') {
+    Object.assign(r, { kind: 'move', gain: Math.floor(send * 0.6) });
+  } else {
+    const P = battleParams(s, from, to, 'song', send);
+    const chance = winChance(P.atkBase, P.defBase);
+    const gain = clamp((P.atkBase - P.defBase) / P.atkBase, 0, 1);
+    Object.assign(r, {
+      kind: 'attack', chance, ratio: P.atkBase / P.defBase,
+      atkMin: P.atkBase * 0.85, atkMax: P.atkBase * 1.20,
+      defMin: P.defBase * 0.90, defMax: P.defBase * 1.15,
+      atkParts: P.atkParts, defParts: P.defParts,
+      survivors: clamp(Math.round(send * (0.36 + gain * 0.34)), 2, send),
+      loss: send - Math.round(send * 0.28),
+      verdict: chance >= 0.80 ? '十拿九稳' : chance >= 0.60 ? '颇有胜算'
+        : chance >= 0.40 ? '胜负参半' : chance >= 0.20 ? '凶多吉少' : '几无胜算',
+    });
+  }
+
+  if (s.over) r.reason = '本局已终';
+  else if (s.pendingEvent) r.reason = '请先裁断朝议';
+  else if (send < 2 || from.troops <= 2) r.reason = '兵力过寡，不可轻动';
+  else if (s.grain < cost) r.reason = `粮秣不足，需 ${cost} 粮`;
+  else if (s.decree < 1) r.reason = '政令已尽';
+  else { r.ok = true; r.reason = '可下此令'; }
+  return r;
 }

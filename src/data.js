@@ -202,4 +202,27 @@ export const EVENTS = [
 export const TERRAIN_LABEL = { plain: '平原', mountain: '山险', river: '水网', coast: '滨海' };
 export const TERRAIN_DEFENSE = { plain: 0.00, mountain: 0.35, river: 0.20, coast: 0.10 };
 
+/** 本色回合上限；实际每局以 GameState.maxTurns 为准 */
 export const MAX_TURNS = 32;
+
+/** 难度档：normal 与最初的数值完全一致，其余两档在其上做加减 */
+export const DIFFICULTIES = [
+  {
+    id: 'easy', name: '偏安可守', tag: '宽和',
+    desc: '金军初势稍弱，仓廪充裕，四十回合为限。',
+    maxTurns: 40, grain: 170, gold: 110, jinTroops: -2, jinFury: 0,
+    jinMight: -0.10, zhanDelta: 6, decreeBonus: 1, luck: 'good',
+  },
+  {
+    id: 'normal', name: '建炎北伐', tag: '本色',
+    desc: '本色兵力粮账，三十二回合为限，攻守最见章法。',
+    maxTurns: 32, grain: 140, gold: 90, jinTroops: 0, jinFury: 0,
+    jinMight: 0, zhanDelta: 0, decreeBonus: 0, luck: 'mixed',
+  },
+  {
+    id: 'hard', name: '直捣黄龙', tag: '艰险',
+    desc: '金人重兵压境、锐气正盛，二十回合为限。',
+    maxTurns: 20, grain: 105, gold: 65, jinTroops: 2, jinFury: 1,
+    jinMight: 0.24, zhanDelta: -6, decreeBonus: 0, luck: 'bad',
+  },
+];

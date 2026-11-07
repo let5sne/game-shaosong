@@ -1,4 +1,6 @@
-import { HEROES, TERRAIN_LABEL, MAX_TURNS } from './data.js';
+import { HEROES, TERRAIN_LABEL, DIFFICULTIES } from './data.js';
+import { previewBattle } from './rules.js';
+import { readSave, writeSave, clearSave, saveInfo, restore } from './save.js';
 import {
   chooseAction, applyAction, chooseEvent, newTurnContext, phaseOf,
 } from './autoplay.js';
@@ -64,8 +66,17 @@ const TEMPLATE = `
       <div><b>回合军政</b><span>每回合数道政令，用兵先算粮</span></div>
       <div><b>朝局人心</b><span>主战主和消长，牵动国运</span></div>
     </div>
+    <div class="intro-setup">
+      <div class="setup-label">择 定 国 势</div>
+      <div class="diff-row" id="diffRow">
+        ${DIFFICULTIES.map(d => `<button class="diff-btn ${d.id === 'normal' ? 'active' : ''}" data-act="difficulty" data-id="${d.id}"><b>${d.name}</b><span>${d.tag}</span></button>`).join('')}
+      </div>
+      <div class="diff-desc" id="diffDesc"></div>
+      <div class="variant-note" id="variantNote"></div>
+    </div>
     <div class="intro-actions">
       <button class="btn-primary big" data-act="start">进位临朝 <em>→</em></button>
+      <button class="btn-ghost" data-act="continue" id="continueBtn" hidden>续上一局</button>
       <button class="btn-ghost" data-act="auto-start">⟡ 托管推演 · 自动北伐直至胜利</button>
     </div>
     <div class="intro-foot">灵感取自《绍宋》架空历史设定 · 文案与数值为原创 · 非官方作品</div>
@@ -80,10 +91,10 @@ const TEMPLATE = `
     <h2>玩法略要</h2>
     <div class="help-grid">
       <section><h3>一、大局</h3><p>靖康之后，宋据江左，金占中原。你每回合有若干<b>政令</b>，用于整军、筹粮、进军、拜将等。点「结束回合」后，度支结算、金军行动、随机事件依次发生。</p></section>
-      <section><h3>二、用兵</h3><p>先点选一座己方州郡，再按「进军」，然后点选<b>相邻</b>州郡（地图上有官道相连）。攻金城即攻城战，攻己城为移防。每城每回合只可整军一次，且受<b>兵额</b>所限；克城后损兵甚重，须就地休整。胜负由兵力、士气、地形、都督与御驾亲征共同决定。</p></section>
+      <section><h3>二、用兵与推演</h3><p>先点选一座己方州郡，再按「进军」，右栏即列出<b>进兵推演</b>：每个相邻州郡的胜算、攻守势区间、克城后存兵与各项加成，点一行便可下令；州郡索引的城名后也标了胜算。攻金城即攻城战，攻己城为移防。每城每回合只可整军一次，且受<b>兵额</b>所限；克城后损兵甚重，须就地休整。临阵双方各有浮动，胜算并非必胜之数。</p></section>
       <section><h3>三、朝局</h3><p>主战威望高则政令多、军心盛；主和过盛则北伐之议渐寝。任命都督会明显改变朝局。民心决定粮赋，士气决定攻势，粮尽则军自溃。</p></section>
-      <section><h3>四、胜败</h3><p><b>胜</b>：收复东京开封与燕京（或尽逐金人）。<b>败</b>：临安／建康失守、民心归零、连岁乏粮，或 ${MAX_TURNS} 回合内未竟全功。</p></section>
-      <section><h3>五、操作</h3><p>拖拽旋转舆图、滚轮缩放、右键平移、点选州郡。<kbd>空格</kbd>结束回合，<kbd>Esc</kbd>取消进军，<kbd>H</kbd>打开本页，<kbd>R</kbd>复位视角，<kbd>A</kbd>开关托管推演。</p></section>
+      <section><h3>四、胜败</h3><p><b>胜</b>：收复东京开封与燕京（或尽逐金人）。<b>败</b>：临安／建康失守、民心归零、连岁乏粮，或于回合上限内未竟全功。开场页可择<b>三档国势</b>：宽和、本色、艰险，分别改金军兵势、仓廪、回合上限与开局变局；每局另有两条随机变局，局号注于战报与「北伐大计」。</p></section>
+      <section><h3>五、操作</h3><p>拖拽旋转舆图、滚轮缩放、右键平移、点选州郡。<kbd>空格</kbd>结束回合，<kbd>Esc</kbd>取消进军，<kbd>H</kbd>打开本页，<kbd>R</kbd>复位视角，<kbd>A</kbd>开关托管推演。局面<b>逐令自动存档</b>，刷新或关机后自开场页「续上一局」接续；终局清档。</p></section>
       <section><h3>六、节律</h3><p>金骑只在<b>秋、冬</b>南牧，春夏淮上暂宁，正是整军北伐的窗口。先取徐州、蔡州等外围，再图开封；「御驾亲征」叠加都督加成可破坚城。久不北伐则主和日盛——偏安拖不出中兴。</p></section>
       <section><h3>七、托管推演</h3><p>开场页按「托管推演」，或局中按顶栏 <b>▶</b>／<kbd>A</kbd>，便由 AI 代为临朝，逐回合决策，直至克复两京。托管守<b>三段战略</b>：固淮北 → 复旧都 → 取燕云；每回合至多两度进军、两处整军。可暂停、切换 ×1／×3／×8 倍速、随时停止接手。若一局失利会自动重整山河再北伐。</p></section>
       <section><h3>八、推演公允</h3><p>托管与官家用的是<b>同一套规则、同一份粮账、同一个随机数</b>，没有隐藏兵力或暗改判定；它只是把攻守之势算得更准、更不肯冒险。托管中的战报、事件裁断与三维行军，与你亲手所下之令并无二致。</p></section>
@@ -121,6 +132,12 @@ function sfx(kind) {
 
 const $ = (root, sel) => root.querySelector(sel);
 const esc = s => String(s).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+const DIFF_KEY = 'shaosong.difficulty';
+const readDiff = () => {
+  try { const v = localStorage.getItem(DIFF_KEY); return DIFFICULTIES.some(d => d.id === v) ? v : 'normal'; }
+  catch (_) { return 'normal'; }
+};
+const writeDiff = v => { try { localStorage.setItem(DIFF_KEY, v); } catch (_) { /* 隐私模式 */ } };
 
 export function createUI(root, state) {
   root.innerHTML = TEMPLATE;
@@ -138,12 +155,17 @@ export function createUI(root, state) {
     autoProgress: $(root, '#autoProgress'), autoPause: $(root, '#autoPause'),
     autoSpeed: $(root, '#autoSpeed'), autoRestart: $(root, '#autoRestart'),
     autoStop: $(root, '#autoStop'),
+    diffRow: $(root, '#diffRow'), diffDesc: $(root, '#diffDesc'),
+    variantNote: $(root, '#variantNote'), continueBtn: $(root, '#continueBtn'),
   };
 
   let world = null;
   let selected = null;
   let marchFrom = null;
   let logCollapsed = false;
+  let chosenDifficulty = readDiff();
+  let started = false;
+  let saveTimer = null;
 
   // 托管推演状态
   const auto = {
@@ -153,6 +175,63 @@ export function createUI(root, state) {
   const MAX_AUTO_GAMES = 8;
   const SPEEDS = [1, 3, 8];
   const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+  const fmtPct = v => (v < 0.005 ? '&lt;1%' : Math.round(v * 100) + '%');
+  const signed = ([label, v]) => `${esc(label)} ${v >= 0 ? '+' : ''}${Math.round(v * 100)}%`;
+  const currentDiff = () => DIFFICULTIES.find(d => d.id === chosenDifficulty) || DIFFICULTIES[1];
+
+  function hideIntro() {
+    el.intro.hidden = true;
+    el.intro.classList.add('gone');
+  }
+
+  function renderIntro() {
+    const D = currentDiff();
+    el.diffRow.querySelectorAll('.diff-btn').forEach(b => b.classList.toggle('active', b.dataset.id === chosenDifficulty));
+    el.diffDesc.textContent = D.desc;
+    el.variantNote.textContent = `每局另有两条随机变局（${D.luck === 'good' ? '偏吉' : D.luck === 'bad' ? '偏凶' : '吉凶参半'}），局号与变局均载于战报。`;
+    const info = saveInfo();
+    el.continueBtn.hidden = !info;
+    if (info) {
+      const dn = DIFFICULTIES.find(d => d.id === info.difficulty)?.name || '建炎北伐';
+      el.continueBtn.textContent = `续上一局 · ${dn} 第 ${info.turn} 回合 · #${info.seed || ''}`;
+    }
+  }
+
+  function persist() {
+    if (!started || state.over) { clearSave(); return; }
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => { if (started && !state.over) writeSave(state); }, 120);
+  }
+  function flushSave() {
+    clearTimeout(saveTimer);
+    if (started && !state.over) writeSave(state);
+  }
+
+  /** 进军模式：把 battle() 的算盘摊成可点选的推演列表 */
+  function forecastHtml(s, fromId) {
+    const from = s.cities[fromId];
+    const send = Math.max(2, Math.floor(from.troops * 0.70));
+    const rows = from.links.map(id => {
+      const to = s.cities[id];
+      const p = previewBattle(s, fromId, id);
+      const parts = arr => arr.filter(x => Math.abs(x[1]) > 0.001).map(signed).join(' · ');
+      const body = p.kind === 'move'
+        ? `<div class="fc-meta">调 ${p.gain} 营实边 · 耗粮 ${p.cost}</div>`
+        : `<div class="fc-odds"><div class="fc-bar"><i style="width:${Math.round(p.chance * 100)}%;background:${p.chance >= 0.6 ? '#b5483a' : p.chance >= 0.35 ? '#b9924c' : '#3d4b60'}"></i></div><b>${fmtPct(p.chance)}</b><span>${p.verdict}</span></div>
+           <div class="fc-meta">攻势 ${p.atkMin.toFixed(0)}~${p.atkMax.toFixed(0)} · 守势 ${p.defMin.toFixed(0)}~${p.defMax.toFixed(0)}</div>
+           <div class="fc-meta">克城约存 ${p.survivors} 营 · 不利约折 ${p.loss} 营 · 耗粮 ${p.cost}</div>
+           <div class="fc-parts">${parts(p.atkParts)}<br>${parts(p.defParts)}</div>`;
+      return `<button class="fc-row ${p.ok ? '' : 'disabled'}" data-act="pre-march" data-id="${id}" ${p.ok ? '' : 'disabled'} title="${esc(p.reason)}">
+        <div class="fc-head"><b>${esc(to.name)}</b><span class="owner-mini ${to.owner}">${to.owner === 'song' ? '移防' : '攻城'}</span><span class="fc-troops">${to.troops} 营</span></div>
+        ${body}</button>`;
+    }).join('');
+    return `<section class="card forecast">
+      <div class="card-eyebrow">进兵推演 <span class="decree-pip">自 ${esc(from.name)} 出 ${send} 营</span></div>
+      <div class="fc-list">${rows}</div>
+      <p class="card-note">胜算依兵力、士气、都督、亲征与守城地利实算，临阵各有浮动。点一行即下此令；按 <kbd>Esc</kbd> 取消进军可复用军政指令。</p>
+    </section>`;
+  }
 
   function attachWorld(w) { world = w; render(); }
 
@@ -174,7 +253,7 @@ export function createUI(root, state) {
 
   function render() {
     const s = state;
-    el.era.innerHTML = `<span class="era-main">${esc(s.yearName)}</span><span class="era-sub">第 ${s.turn} / ${MAX_TURNS} 回合</span>`;
+    el.era.innerHTML = `<span class="era-main">${esc(s.yearName)}</span><span class="era-sub">第 ${s.turn} / ${s.maxTurns} 回合</span>`;
     el.stats.innerHTML =
       stat('粮秣', s.grain, '万石', s.grain < 40 ? 'warn' : '') +
       stat('缗钱', s.gold, '万贯') +
@@ -195,6 +274,7 @@ export function createUI(root, state) {
         </div>
         ${bar('版籍', songN / (songN + jinN) * 100, '#b5483a')}
         <div class="mini-row"><span>宋 ${songN} 州 · ${s.totalTroops} 营</span><span>金 ${jinN} 州 · ${s.jinTroops} 营</span></div>
+        <div class="game-note">${esc(s.diffDef.name)} · 局号 #${s.seed}${s.variant?.notes?.length ? '<br>' + esc(s.variant.notes.join('，')) : ''}</div>
       </section>
 
       <section class="card court">
@@ -243,10 +323,12 @@ export function createUI(root, state) {
             <div><span>驻军</span><b>${c.troops} 营</b></div>
             <div><span>岁赋</span><b>${c.yieldGrain} 粮</b></div>
           </div>
-          <div class="link-label">官道所通</div>
+          <div class="link-label">官道所通 <span class="link-legend">· 金城后标胜算</span></div>
           <div class="link-list">${c.links.map(id => {
             const n = s.cities[id];
-            return `<button class="link-chip ${n.owner}" data-act="pick" data-id="${id}">${esc(n.name)} <i>${n.troops}</i></button>`;
+            const p = c.owner === 'song' && n.owner === 'jin' ? previewBattle(s, c.id, id) : null;
+            const cls = !p ? '' : p.chance >= 0.6 ? 'good' : p.chance >= 0.35 ? 'mid' : 'low';
+            return `<button class="link-chip ${n.owner}" data-act="pick" data-id="${id}" ${p ? `title="胜算 ${fmtPct(p.chance)} · ${p.verdict}"` : ''}>${esc(n.name)} <i>${n.troops}</i>${p ? `<em class="odds ${cls}">${fmtPct(p.chance)}</em>` : ''}</button>`;
           }).join('')}</div>
         ` : `
           <div class="empty-city">
@@ -265,6 +347,8 @@ export function createUI(root, state) {
           </select>
         </div>
       </section>
+
+      ${marchFrom ? forecastHtml(s, marchFrom) : ''}
 
       <section class="card commands">
         <div class="card-eyebrow">军政指令 <span class="decree-pip">余 ${s.decree} 道</span></div>
@@ -290,12 +374,13 @@ export function createUI(root, state) {
 
     if (marchFrom) {
       el.hint.hidden = false;
-      el.hint.innerHTML = `<span class="pulse"></span>进军：自 <b>${esc(s.cities[marchFrom].name)}</b> 点选相邻州郡（金色光环）<button data-act="cancel-march">取消 · Esc</button>`;
+      el.hint.innerHTML = `<span class="pulse"></span>进军：自 <b>${esc(s.cities[marchFrom].name)}</b> 点选相邻州郡，或于右栏「进兵推演」择胜算而行<button data-act="cancel-march">取消 · Esc</button>`;
     } else {
       el.hint.hidden = true;
       el.hint.innerHTML = '';
     }
 
+    el.right.classList.toggle('marching', !!marchFrom);
     world?.setSelection(selected, marchFrom ? s.cities[marchFrom].links : []);
     world?.update(s);
     updateAutoHud();
@@ -306,7 +391,7 @@ export function createUI(root, state) {
     if (!el.autoHud) return;
     const total = Object.keys(state.cities).length;
     el.autoPhase.textContent = phaseOf(state);
-    el.autoRound.textContent = `第 ${auto.game} 局 · ${state.yearName} · 第 ${state.turn}/${MAX_TURNS} 回合`;
+    el.autoRound.textContent = `第 ${auto.game} 局 · ${state.yearName} · 第 ${state.turn}/${state.maxTurns} 回合`;
     el.autoDecision.textContent = auto.decision || '整军待发……';
     el.autoBar.style.width = `${Math.round(state.songCities.length / total * 100)}%`;
     el.autoProgress.textContent = `版籍 ${state.songCities.length}/${total} · 已下 ${auto.actions} 令`;
@@ -402,8 +487,11 @@ export function createUI(root, state) {
 
   function startAuto() {
     if (auto.running) return;
-    el.intro.hidden = true;
-    el.intro.classList.add('gone');
+    if (!started) {
+      started = true;
+      state.reset({ difficulty: chosenDifficulty });
+    }
+    hideIntro();
     el.helpModal.hidden = true;
     if (state.over) restart(true);
     auto.running = true;
@@ -423,6 +511,7 @@ export function createUI(root, state) {
     el.autoSpeed.textContent = `×${auto.speed}`;
     marchFrom = null;
     updateAutoHud();
+    persist();
     sfx('event');
     toast('托管推演开始 · 固淮北 → 复旧都 → 取燕云，直至克复两京。');
     autoLoop();
@@ -453,20 +542,20 @@ export function createUI(root, state) {
     render();
   }
 
+  function doMarch(fromId, toId) {
+    marchFrom = null;
+    sfx('war');
+    state.jinjun(fromId, toId);
+    selectCity(toId, true);
+  }
+
   function handlePick(id) {
     if (auto.running) return;   // 托管期间舆图只读，避免与推演争令
     if (state.over || state.pendingEvent || el.intro.hidden === false) return;
     if (marchFrom) {
       const from = state.cities[marchFrom];
       if (id === marchFrom) { cancelMarch(); return; }
-      if (from.links.includes(id)) {
-        const target = id;
-        marchFrom = null;
-        sfx('war');
-        state.jinjun(from.id, target);
-        selectCity(target, true);
-        return;
-      }
+      if (from.links.includes(id)) { doMarch(from.id, id); return; }
       toast('两州无官道相通，不能进军。', 'bad');
       marchFrom = null;
     }
@@ -493,7 +582,6 @@ export function createUI(root, state) {
         if (!selected || state.cities[selected].owner !== 'song') { toast('先点选一座己方州郡。', 'bad'); break; }
         if (state.decree < 1) { toast('政令已尽。', 'bad'); break; }
         marchFrom = selected;
-        toast('请点选相邻州郡，金环者为可达。');
         sfx('click');
         render();
         return;
@@ -540,10 +628,50 @@ export function createUI(root, state) {
     if (auto.running && !passive.includes(act)) { toast('托管推演中，请先停止托管。'); return; }
 
     if (act === 'start') {
-      el.intro.hidden = true;
-      el.intro.classList.add('gone');
+      started = true;
+      state.reset({ difficulty: chosenDifficulty });
+      hideIntro();
+      render();
+      persist();
       sfx('event');
-      state.changed();
+      return;
+    }
+    if (act === 'continue') {
+      if (!restore(state, readSave())) {
+        clearSave(); renderIntro();
+        toast('旧档已损，请另开新局。', 'bad');
+        return;
+      }
+      started = true;
+      chosenDifficulty = state.difficulty;
+      writeDiff(chosenDifficulty);
+      selected = null;
+      marchFrom = null;
+      el.endModal.hidden = true;
+      el.eventModal.hidden = true;
+      hideIntro();
+      render();
+      renderIntro();
+      if (state.pendingEvent) showEvent(state.pendingEvent);
+      if (state.over) showEnd(state.over);
+      toast(`已续 ${state.diffDef.name} · 第 ${state.turn} 回合。`);
+      sfx('event');
+      persist();
+      return;
+    }
+    if (act === 'difficulty') {
+      chosenDifficulty = btn.dataset.id;
+      writeDiff(chosenDifficulty);
+      renderIntro();
+      sfx('click');
+      return;
+    }
+    if (act === 'pre-march') {
+      if (!marchFrom || state.over || state.pendingEvent) return;
+      const id = btn.dataset.id;
+      const p = previewBattle(state, marchFrom, id);
+      if (!p.ok) { toast(esc(p.reason), 'bad'); return; }
+      doMarch(marchFrom, id);
       return;
     }
     if (act === 'toggle-log') { logCollapsed = !logCollapsed; render(); sfx('click'); return; }
@@ -557,7 +685,7 @@ export function createUI(root, state) {
     }
     if (act === 'reset-cam') { world?.resetCamera(); sfx('click'); return; }
     if (act === 'restart' || act === 'restart-game') {
-      if (act === 'restart' && !state.over && state.turn > 1 && !window.confirm('重开一局？当前进度将不复保留。')) return;
+      if (act === 'restart' && !state.over && state.turn > 1 && !window.confirm('重开一局？当前进度与存档将由新局取代。')) return;
       restart();
       return;
     }
@@ -589,6 +717,11 @@ export function createUI(root, state) {
 
   function restart(quiet = false) {
     state.reset();
+    chosenDifficulty = state.difficulty;
+    writeDiff(chosenDifficulty);
+    clearSave();
+    persist();
+    renderIntro();
     selected = null;
     marchFrom = null;
     el.endModal.hidden = true;
@@ -644,6 +777,8 @@ export function createUI(root, state) {
   function showEnd(over) {
     // 托管败局只在状态条里一笔带过并自动重开；胜局照常大告天下
     if (auto.running && over.kind !== 'win') return;
+    clearSave();
+    renderIntro();
     sfx(over.kind === 'win' ? 'win' : 'lose');
     const songN = state.songCities.length;
     el.endBody.innerHTML = `
@@ -665,12 +800,15 @@ export function createUI(root, state) {
     render();
   }
 
-  state.on('change', render);
+  state.on('change', () => { render(); persist(); });
   state.on('event', showEvent);
   state.on('end', showEnd);
   state.on('march', payload => world?.march(payload));
 
   render();
+  renderIntro();
+  window.addEventListener('pagehide', flushSave);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) flushSave(); });
   return {
     attachWorld, render, handlePick, toast, sfx,
     startAuto, stopAuto, toggleAuto,

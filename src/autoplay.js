@@ -10,7 +10,7 @@
  *   2) 用兵节律：每回合至多两度进军、两处整军；
  *   3) 攻城留余量：期望攻守比不足阈值便先蓄势，不赌运气。
  */
-import { TERRAIN_DEFENSE } from './data.js';
+import { battleParams } from './rules.js';
 
 export const BEST_HERO = 'yuefei';
 
@@ -52,23 +52,15 @@ const PHASE_BIAS = {
   },
 };
 
-/** 攻守系数须与 rules.js :: battle() 保持一致 */
+/** 与 rules.js :: battleParams() 同源，托管不再另算一套攻守系数 */
 export function battleOdds(s, from, to) {
   const send = Math.max(2, Math.floor(from.troops * 0.70));
-  const bonus = 1
-    + s.morale / 320
-    + (s.charge ? 0.25 : 0)
-    + (s.hero?.atk || 0)
-    + s.gearBonus
-    + (s.court.zhan - s.court.he) / 500;
-  const wall = (to.capitalOfJin || to.capitalOfSong || to.seat ? 0.18 : 0.08)
-    + (to.id === 'kaifeng' || to.id === 'yanjing' ? 0.08 : 0);
-  const defFactor = 1 + wall + (TERRAIN_DEFENSE[to.terrain] || 0);
+  const P = battleParams(s, from, to, 'song', send);
   return {
     send,
     cost: Math.round(send * 1.6),
     // >1 表示期望上可破城；双方各有 ±20% 随机，故实际阈值还要留余量
-    ratio: (send * bonus) / Math.max(1, to.troops * defFactor),
+    ratio: P.atkBase / P.defBase,
   };
 }
 
