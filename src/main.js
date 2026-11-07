@@ -29,10 +29,9 @@ function chooseQuality() {
 }
 const quality = chooseQuality();
 const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ?? false;
-// 宣纸增强（墨晕／描边／纸纹／色调）：high 档默认开，low 档默认关以免拖慢软件渲染。
-// ?ink=0/1 强制关／开；world.ink.setEnabled() 还能在运行时逐帧切换做 A/B 对比。
-const inkArg = params.get('ink');
-const ink = inkArg === '0' ? false : inkArg === '1' ? true : quality === 'high';
+// 宣纸增强（墨晕／描边／纸纹／色调）默认关闭：实机 A/B 后更偏好原版清透的宣纸沙盘。
+// ?ink=1 显式开启，?ink=0 明确关闭；world.ink.setEnabled() 仍可在运行时逐帧切换做 A/B 对比。
+const ink = params.get('ink') === '1';
 
 // 调试／自动化入口：可在控制台查看局面或启动托管推演
 window.__shaosong = { state, ui, world: null, fixedSeed, worldReady: null, quality, reducedMotion, ink };

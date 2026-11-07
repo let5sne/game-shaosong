@@ -187,7 +187,7 @@ function mergeAll(list) {
 }
 
 // ── 主场景 ──────────────────────────────────────────────────
-export function createWorld(container, state, { onPick, quality = 'high', reducedMotion = false, ink = true } = {}) {
+export function createWorld(container, state, { onPick, quality = 'high', reducedMotion = false, ink = false } = {}) {
   const low = quality === 'low';            // 低配：DPR 封顶 1、关阴影、植被采样减半
   const still = !!reducedMotion;            // 系统「减弱动效」：波光、旗面、飞鸟静止
   const dprCap = low ? 1 : 2;
