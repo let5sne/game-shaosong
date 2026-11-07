@@ -186,7 +186,12 @@ function mergeAll(list) {
 }
 
 // ── 主场景 ──────────────────────────────────────────────────
-export function createWorld(container, state, { onPick }) {
+export function createWorld(container, state, { onPick, quality = 'high', reducedMotion = false } = {}) {
+  const low = quality === 'low';            // 低配：DPR 封顶 1、关阴影、植被采样减半
+  const still = !!reducedMotion;            // 系统「减弱动效」：波光、旗面、飞鸟静止
+  const dprCap = low ? 1 : 2;
+  // 旗面波动与海面起伏共用同一份时间 uniform
+  const uTime = { value: 0 };
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(PAPER);
   scene.fog = new THREE.Fog(PAPER, 118, 255);
@@ -195,12 +200,12 @@ export function createWorld(container, state, { onPick }) {
   camera.position.set(6, 84, 96);
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, dprCap));
   renderer.setSize(container.clientWidth, container.clientHeight);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.28;
-  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.enabled = !low;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   container.appendChild(renderer.domElement);
 
@@ -220,8 +225,9 @@ export function createWorld(container, state, { onPick }) {
   scene.add(new THREE.AmbientLight(0xffffff, 0.26));
   const sun = new THREE.DirectionalLight(0xfff0d0, 2.25);
   sun.position.set(-42, 88, 48);
-  sun.castShadow = true;
-  sun.shadow.mapSize.set(1536, 1536);
+  sun.castShadow = !low;
+  const shadowSize = low ? 512 : 1536;
+  sun.shadow.mapSize.set(shadowSize, shadowSize);
   sun.shadow.camera.left = -78; sun.shadow.camera.right = 78;
   sun.shadow.camera.top = 78; sun.shadow.camera.bottom = -78;
   sun.shadow.camera.near = 1; sun.shadow.camera.far = 220;
@@ -265,14 +271,25 @@ export function createWorld(container, state, { onPick }) {
   geo.dispose();
 
   // ── 海面 + 流动波光 ──
+  // 起伏放到 vertex shader：原先每帧在 CPU 改 957 个顶点并重传整个 VBO
   const seaGeo = new THREE.PlaneGeometry(W, D, 32, 28);
   seaGeo.rotateX(-Math.PI / 2);
   seaGeo.translate(CX, WATER_Y, CZ);
-  const seaBase = Float32Array.from(seaGeo.attributes.position.array);
-  const sea = new THREE.Mesh(seaGeo, new THREE.MeshStandardMaterial({
+  const seaMat = new THREE.MeshStandardMaterial({
     color: 0x89aeb6, transparent: true, opacity: 0.82, roughness: 0.30, metalness: 0.10,
     depthWrite: false, side: THREE.DoubleSide,
-  }));
+  });
+  seaMat.onBeforeCompile = shader => {
+    shader.uniforms.uTime = uTime;
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nuniform float uTime;')
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+        transformed.y += sin(position.x * 0.24 + uTime * 0.9) * 0.055
+          + cos(position.z * 0.29 + uTime * 0.7) * 0.045;
+      `);
+  };
+  seaMat.customProgramCacheKey = () => 'shaosong-sea-wave';
+  const sea = new THREE.Mesh(seaGeo, seaMat);
   sea.renderOrder = 1;
   scene.add(sea);
   const waterTexSea = makeWaterTexture();
@@ -368,8 +385,9 @@ export function createWorld(container, state, { onPick }) {
 
   // ── 植被：松、阔叶、山石，按海拔与气候散布 ──
   const groves = { pine: [], broad: [], rock: [] };
-  for (let x = -56; x <= 48; x += 2.05) {
-    for (let z = -48; z <= 44; z += 2.05) {
+  const vegStep = low ? 3.1 : 2.05;
+  for (let x = -56; x <= 48; x += vegStep) {
+    for (let z = -48; z <= 44; z += vegStep) {
       const px = x + (hash(x, z) - 0.5) * 1.5;
       const pz = z + (hash(z + 7, x) - 0.5) * 1.5;
       const h = heightAt(px, pz);
@@ -411,6 +429,7 @@ export function createWorld(container, state, { onPick }) {
     im.instanceMatrix.needsUpdate = true;
     if (im.instanceColor) im.instanceColor.needsUpdate = true;
     im.count = list.length;
+    // 实例散布于全图，单一包围球恒与视锥相交；须先按空间 chunk 分组才能安全开启剔除
     im.frustumCulled = false;
     scene.add(im);
   }
@@ -418,7 +437,6 @@ export function createWorld(container, state, { onPick }) {
   // ── 城池 ──
   const cityLib = buildCityLibrary();
   const flagTex = { song: makeFlagTexture(true), jin: makeFlagTexture(false) };
-  const uTime = { value: 0 };
   const flagMats = {
     song: makeFlagMaterial(flagTex.song, uTime, FLAG_W),
     jin: makeFlagMaterial(flagTex.jin, uTime, FLAG_W),
@@ -486,6 +504,7 @@ export function createWorld(container, state, { onPick }) {
   }
 
   // ── 兵力营帐：全局一个 InstancedMesh，按兵力增减 ──
+  const TENT_COLOR = { song: new THREE.Color(SONG_LIGHT), jin: new THREE.Color(JIN_LIGHT) };
   const tentMesh = new THREE.InstancedMesh(
     tentGeometry(),
     new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.9 }),
@@ -502,6 +521,7 @@ export function createWorld(container, state, { onPick }) {
       tentSlots[def.id].push({ idx: ci * TENT_SLOTS + i, x, y: heightAt(x, z), z, rot: hash(x, z) * 0.6 });
     }
   });
+  // 同上：24 城实例共用一个包围球，待空间分块后再开启视锥剔除
   tentMesh.frustumCulled = false;
   scene.add(tentMesh);
 
@@ -617,8 +637,14 @@ export function createWorld(container, state, { onPick }) {
   // ── 状态同步 ──
   let selectedId = null;
   let reachable = [];
+  // 透明度归零的圆环直接退出渲染队列，省掉每帧上百个空 draw call
+  function setRing(ring, opacity) {
+    ring.material.opacity = opacity;
+    ring.visible = opacity > 0.001;
+  }
   function update(s) {
     const sup = supplyMap(s);
+    let tentDirty = false;
     for (const id in cityViews) {
       const v = cityViews[id];
       const c = s.cities[id];
@@ -627,26 +653,39 @@ export function createWorld(container, state, { onPick }) {
       v.faction.material = matFaction[c.owner];
       v.flag.material = flagMats[c.owner];
       v.influence.material.color.setHex(isolated ? 0x6f5b83 : song ? SONG_COLOR : JIN_COLOR);
-      v.influence.material.opacity = isolated ? 0.70 : song ? 0.30 : 0.46;
-      drawLabel(v.cv, c, id === selectedId);
-      v.tex.needsUpdate = true;
-      v.selRing.material.opacity = id === selectedId ? 0.95 : 0;
-      v.reachRing.material.opacity = reachable.includes(id) ? 0.8 : 0;
-      v.stationRing.material.opacity = s.heroCity === id ? 0.85 : 0;
-      v.isoRing.material.opacity = isolated ? 0.82 : 0;
+      setRing(v.influence, isolated ? 0.70 : song ? 0.30 : 0.46);
+      // 名牌是 768×240 的 canvas 贴图：只在归属／兵力／选中态变化时重绘上传
+      const labelKey = `${c.owner}|${c.troops}|${id === selectedId ? 1 : 0}`;
+      if (v.labelKey !== labelKey) {
+        drawLabel(v.cv, c, id === selectedId);
+        v.tex.needsUpdate = true;
+        v.labelKey = labelKey;
+      }
+      setRing(v.selRing, id === selectedId ? 0.95 : 0);
+      setRing(v.reachRing, reachable.includes(id) ? 0.8 : 0);
+      setRing(v.stationRing, s.stationAt(id) ? 0.85 : 0);
+      setRing(v.isoRing, isolated ? 0.82 : 0);
 
+      // 营帐实例同理：兵力档位或阵营没变就不重传矩阵与颜色
       const shown = Math.max(1, Math.min(TENT_SLOTS, Math.ceil(c.troops / 2.4)));
-      for (const slot of tentSlots[id]) {
-        dummy.position.set(slot.x, slot.y, slot.z);
-        dummy.rotation.set(0, slot.rot, 0);
-        dummy.scale.setScalar(slot.idx % TENT_SLOTS < shown ? 0.82 : 0);
-        dummy.updateMatrix();
-        tentMesh.setMatrixAt(slot.idx, dummy.matrix);
-        tentMesh.setColorAt(slot.idx, new THREE.Color(song ? SONG_LIGHT : JIN_LIGHT));
+      const tentKey = `${shown}|${song ? 1 : 0}`;
+      if (v.tentKey !== tentKey) {
+        for (const slot of tentSlots[id]) {
+          dummy.position.set(slot.x, slot.y, slot.z);
+          dummy.rotation.set(0, slot.rot, 0);
+          dummy.scale.setScalar(slot.idx % TENT_SLOTS < shown ? 0.82 : 0);
+          dummy.updateMatrix();
+          tentMesh.setMatrixAt(slot.idx, dummy.matrix);
+          tentMesh.setColorAt(slot.idx, TENT_COLOR[song ? 'song' : 'jin']);
+        }
+        v.tentKey = tentKey;
+        tentDirty = true;
       }
     }
-    tentMesh.instanceMatrix.needsUpdate = true;
-    if (tentMesh.instanceColor) tentMesh.instanceColor.needsUpdate = true;
+    if (tentDirty) {
+      tentMesh.instanceMatrix.needsUpdate = true;
+      if (tentMesh.instanceColor) tentMesh.instanceColor.needsUpdate = true;
+    }
   }
   function setSelection(id, targets = []) {
     selectedId = id;
@@ -681,10 +720,11 @@ export function createWorld(container, state, { onPick }) {
   const clock = new THREE.Clock();
   let elapsed = 0;
   let shadowBaked = false;
-  const seaPos = seaGeo.attributes.position;
   function tick() {
     const dt = Math.min(clock.getDelta(), 0.05);
-    elapsed += dt;
+    // 减弱动效只停装饰动画；相机聚焦、行军与战报特效仍须正常播完
+    const animDt = still ? 0 : dt;
+    elapsed += animDt;
     uTime.value = elapsed;
     controls.update();
 
@@ -696,15 +736,10 @@ export function createWorld(container, state, { onPick }) {
       if (camTween.t >= 1) camTween = null;
     }
 
-    // 水面起伏与流动波光
-    for (let i = 0; i < seaPos.count; i++) {
-      const x = seaBase[i * 3], z = seaBase[i * 3 + 2];
-      seaPos.setY(i, WATER_Y + Math.sin(x * 0.24 + elapsed * 0.9) * 0.055 + Math.cos(z * 0.29 + elapsed * 0.7) * 0.045);
-    }
-    seaPos.needsUpdate = true;
-    waterTexSea.offset.y += dt * 0.010;
-    waterTexSea.offset.x += dt * 0.004;
-    waterTexRiver.offset.y -= dt * 0.30;
+    // 海面起伏由 shader 逐帧完成，这里只推进贴图流动
+    waterTexSea.offset.y += animDt * 0.010;
+    waterTexSea.offset.x += animDt * 0.004;
+    waterTexRiver.offset.y -= animDt * 0.30;
 
     for (const b of birds) {
       const a = elapsed * b.speed + b.phase;
@@ -747,12 +782,22 @@ export function createWorld(container, state, { onPick }) {
     if (!shadowBaked) { shadowBaked = true; renderer.shadowMap.autoUpdate = false; }
   }
   renderer.setAnimationLoop(tick);
+  // 显卡上下文丢失后停摆，恢复时重开循环并让阴影重烘一帧
+  renderer.domElement.addEventListener('webglcontextlost', e => {
+    e.preventDefault();
+    renderer.setAnimationLoop(null);
+  });
+  renderer.domElement.addEventListener('webglcontextrestored', () => {
+    shadowBaked = false;
+    renderer.setAnimationLoop(tick);
+  });
 
   function resize() {
     const w = container.clientWidth, h = container.clientHeight;
     if (!w || !h) return;
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, dprCap));
     renderer.setSize(w, h);
   }
   window.addEventListener('resize', resize);
@@ -760,5 +805,5 @@ export function createWorld(container, state, { onPick }) {
 
   update(state);
 
-  return { update, setSelection, focusCity, resetCamera, march, shock, resize, camera, controls, renderer, scene };
+  return { update, setSelection, focusCity, resetCamera, march, shock, resize, camera, controls, renderer, scene, quality };
 }

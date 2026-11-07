@@ -141,6 +141,18 @@ export const HEROES = [
   },
 ];
 
+/** 拜将情境指引：只作提示，不参与任何数值判定 */
+export const HERO_USE = {
+  yuefei: '平原决战 · 主帅首选',
+  hanshizhong: '渡淮济师 · 免舟楫政令',
+  liqi: '婴城固守 · 分路当选',
+  wujie: '山险孤军 · 关陕自持',
+  zhangjun: '兵额常满 · 广募新军',
+  ligang: '主和渐盛 · 分路补半道政令',
+  zhaoding: '粮秣吃紧 · 分路补漕粮',
+  qinhui: '主和路线 · 军备废弛',
+};
+
 /** 事件卡：cond 决定可否出现，once 表示全局仅一次 */
 export const EVENTS = [
   {
@@ -180,8 +192,35 @@ export const EVENTS = [
     text: '有旧臣自金营南归，自称杀监者夺舟而来，力陈「南自南、北自北」之议。朝议汹汹。',
     cond: s => s.turn >= 3,
     options: [
-      { label: '召对，留置阙下', desc: '主和 +14，缗钱 +25，民心 -4', apply: s => { s.court.he += 14; s.gold += 25; s.popularity -= 4; } },
+      { label: '召对，留置阙下', desc: '主和 +14，缗钱 +25，民心 -4；金人闻有和议，暂缓南下 1 回合；秦桧自此得预朝议', apply: s => { s.court.he += 14; s.gold += 25; s.popularity -= 4; s.truce = 1; }, flag: 'qinhui_at_court' },
       { label: '「朕不问和议」', desc: '主战 +10，士气 +4，主和 -8', apply: s => { s.court.zhan += 10; s.morale += 4; s.court.he -= 8; } },
+    ],
+  },
+  {
+    id: 'heyi_zhao', once: true, priority: 2, title: '和议之诏', tag: '朝论',
+    cond: s => s.flags.has('qinhui_at_court') && s.turn >= 6,
+    text: '秦桧既留阙下，屡以「南自南、北自北」进言。中书舍人夜草诏书，只待御笔：「诸军各守本界，毋得擅启兵端。」殿外将佐闻之，甲声寂然。',
+    options: [
+      { label: '御笔允和', desc: '金人暂缓南下 1 回合，民心 +6；主和 +12、主战 -10、士气 -4', apply: s => { s.truce = 1; s.court.he += 12; s.court.zhan -= 10; s.popularity += 6; s.morale -= 4; }, flag: 'heyi_signed' },
+      { label: '留中不发', desc: '主战 +8、士气 +4、主和 -6；金人知我无意和议，积怒 +1', apply: s => { s.court.zhan += 8; s.morale += 4; s.court.he -= 6; s.jinFury += 1; } },
+    ],
+  },
+  {
+    id: 'fengboting', once: true, priority: 3, title: '风波亭', tag: '朝论',
+    cond: s => s.flags.has('heyi_signed') && s.turn >= 8
+      && (s.heroId === 'yuefei' || s.viceHeroId === 'yuefei'),
+    text: '和议既定，主和者进言：「岳家军不受节度，恐为后患。」一日三诏，召岳侯赴行在。临安父老聚于街口，无人敢言。',
+    options: [
+      {
+        label: '收其兵柄', desc: '岳飞去位（主帅或分路），主和 +10、主战 -12、士气 -12、民心 -5',
+        apply: s => {
+          if (s.heroId === 'yuefei') { s.heroId = null; s.heroCity = null; }
+          else { s.viceHeroId = null; s.viceHeroCity = null; }
+          s.court.he += 10; s.court.zhan -= 12; s.morale -= 12; s.popularity -= 5;
+        },
+        flag: 'yuefei_dismissed',
+      },
+      { label: '力保岳侯', desc: '主战 +10、士气 +8、民心 -3；金人积怒 +1', apply: s => { s.court.zhan += 10; s.morale += 8; s.popularity -= 3; s.jinFury += 1; } },
     ],
   },
   {
@@ -212,7 +251,7 @@ export const EVENTS = [
   {
     id: 'qingzhan', title: '诸将请战', tag: '军务',
     text: '诸军统制联名上书，言粮足马肥，请克日渡淮。枢密院却以「诸将不相统属」为忧。',
-    cond: s => s.grain >= 60,
+    cond: s => s.grain >= 95,
     options: [
       { label: '许之，御驾亲征', desc: '本回合政令 +1，士气 +12，民心 +4', apply: s => { s.decree += 1; s.morale += 12; s.popularity += 4; s.charge = 1; } },
       { label: '令各持重', desc: '粮秣 +15，士气 -5，主战 -4', apply: s => { s.grain += 15; s.morale -= 5; s.court.zhan -= 4; } },
@@ -229,7 +268,7 @@ export const EVENTS = [
   },
   {
     id: 'huaixi', title: '淮西军变', tag: '军务',
-    cond: s => s.grain < 45 || s.morale < 40,
+    cond: s => s.grain < 95 || s.morale < 58,
     text: '有军头因欠饷鼓众，夜焚营寨，携部曲北去。若处置失当，淮上防线恐生裂隙。',
     options: [
       { label: '发帑抚军', desc: '缗钱 -25，粮秣 -15，士气 +8', apply: s => { s.gold -= 25; s.grain -= 15; s.morale += 8; } },
@@ -276,26 +315,26 @@ export const TERRAIN_LABEL = { plain: '平原', mountain: '山险', river: '水�
 export const TERRAIN_DEFENSE = { plain: 0.00, mountain: 0.35, river: 0.20, coast: 0.10 };
 
 /** 本色回合上限；实际每局以 GameState.maxTurns 为准 */
-export const MAX_TURNS = 32;
+export const MAX_TURNS = 30;
 
 /** 难度档：normal 与最初的数值完全一致，其余两档在其上做加减 */
 export const DIFFICULTIES = [
   {
     id: 'easy', name: '偏安可守', tag: '宽和',
-    desc: '金军初势稍弱，仓廪充裕，四十回合为限。',
-    maxTurns: 40, grain: 170, gold: 110, jinTroops: -2, jinFury: 0,
+    desc: '金军初势稍弱，仓廪充裕，三十八回合为限。',
+    maxTurns: 38, grain: 170, gold: 110, jinTroops: -2, jinFury: 0,
     jinMight: -0.10, zhanDelta: 6, decreeBonus: 1, luck: 'good',
   },
   {
     id: 'normal', name: '建炎北伐', tag: '本色',
-    desc: '本色兵力粮账，三十二回合为限，攻守最见章法。',
-    maxTurns: 32, grain: 140, gold: 90, jinTroops: 0, jinFury: 0,
+    desc: '本色兵力粮账，三十回合为限，攻守最见章法。',
+    maxTurns: 30, grain: 140, gold: 90, jinTroops: 0, jinFury: 0,
     jinMight: 0, zhanDelta: 0, decreeBonus: 0, luck: 'mixed',
   },
   {
     id: 'hard', name: '直捣黄龙', tag: '艰险',
-    desc: '金人重兵压境、锐气正盛，二十回合为限。',
-    maxTurns: 20, grain: 105, gold: 65, jinTroops: 2, jinFury: 1,
-    jinMight: 0.24, zhanDelta: -6, decreeBonus: 0, luck: 'bad',
+    desc: '金人重兵压境、锐气正盛，二十六回合为限。',
+    maxTurns: 26, grain: 120, gold: 70, jinTroops: 2, jinFury: 0,
+    jinMight: 0.12, zhanDelta: -6, decreeBonus: 1, luck: 'bad',
   },
 ];

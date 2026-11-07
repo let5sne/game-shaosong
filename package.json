@@ -7,7 +7,9 @@
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
-    "simulate": "node scripts/simulate.mjs"
+    "simulate": "node scripts/simulate.mjs",
+    "test": "node --test",
+    "balance": "node scripts/simulate.mjs 300 --all --check"
   },
   "dependencies": {
     "three": "^0.180.0"

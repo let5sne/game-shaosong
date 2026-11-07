@@ -4,6 +4,7 @@
  *   node scripts/simulate.mjs 300 --difficulty=hard   指定难度
  *   node scripts/simulate.mjs 200 --all          三档各跑 200 局做对比
  *   node scripts/simulate.mjs 50 --verbose       打印首局完整战报
+ *   npm run balance                            三档各 300 局 + 胜率/节奏护栏断言
  */
 import { GameState } from '../src/rules.js';
 import { chooseAction, applyAction, chooseEvent, newTurnContext } from '../src/autoplay.js';
@@ -12,11 +13,13 @@ import { DIFFICULTIES } from '../src/data.js';
 const games = Number(process.argv[2]) || 200;
 const verbose = process.argv.includes('--verbose');
 const all = process.argv.includes('--all');
+const check = process.argv.includes('--check');
 const diffArg = (process.argv.find(a => a.startsWith('--difficulty=')) || '').split('=')[1];
 const MAX_STEPS_PER_TURN = 14;
 
-function playOne(difficulty) {
-  const s = new GameState({ difficulty });
+function playOne(difficulty, seed) {
+  // 固定局号序列：同一批种子每档各跑一遍，回归结果可复现，不受抽样噪声误报影响
+  const s = new GameState({ difficulty, seed });
   const captures = [];
   s.on('log', ({ text }) => {
     if (text.includes('★') || text.includes('【结局】')) captures.push(`T${s.turn} ${text}`);
@@ -63,19 +66,22 @@ function report(label, results) {
   console.log(`平均终局回合 ${avg(results.map(r => r.turn))}   平均胜利回合 ${avg(wins.map(r => r.turn))}`);
   console.log(`胜利回合范围 ${wins.length ? Math.min(...wins.map(r => r.turn)) + ' ~ ' + Math.max(...wins.map(r => r.turn)) : '-'}`);
   console.log(`平均每局指令 ${avg(results.map(r => r.steps))} 步`);
+  const avgWinTurn = wins.length ? Number(avg(wins.map(r => r.turn))) : 0;
   console.log(`结局分布    `, byTitle);
-  return { wins, losses };
+  return { wins, losses, rate: wins.length / results.length, avgWinTurn };
 }
 
-const list = all ? DIFFICULTIES.map(d => d.id)
+const list = (all || check) ? DIFFICULTIES.map(d => d.id)
   : [diffArg && DIFFICULTIES.some(d => d.id === diffArg) ? diffArg : 'normal'];
 
 let first = null;
+const summary = {};
 for (const id of list) {
   const label = DIFFICULTIES.find(d => d.id === id).name;
   const results = [];
-  for (let i = 0; i < games; i++) results.push(playOne(id));
+  for (let i = 0; i < games; i++) results.push(playOne(id, i + 1));
   const r = report(label, results);
+  summary[id] = r;
   if (!first) first = { label, ...r };
 }
 
@@ -91,5 +97,33 @@ if (first) {
   if (first.losses.length && verbose) {
     console.log('\n首败关键节点：');
     first.losses[0].captures.slice(-12).forEach(c => console.log('  ' + c));
+  }
+}
+
+if (check) {
+  // 平衡护栏：数值一旦把本色难度打回「必胜速通」或推向「不可赢」，就在这里拦下。
+  // 区间留得比目标宽，避免有限样本的抽样波动造成假失败。
+  const EXPECT = {
+    easy:   { lo: 0.90, hi: 1.00, minTurn: 12 },
+    normal: { lo: 0.45, hi: 0.75, minTurn: 18 },
+    hard:   { lo: 0.05, hi: 0.45, minTurn: 18 },
+  };
+  console.log('\n═══ 平衡回归 ───');
+  let failed = 0;
+  for (const [id, e] of Object.entries(EXPECT)) {
+    const r = summary[id];
+    const rate = r?.rate ?? 0;
+    const turn = r?.avgWinTurn ?? 0;
+    const okRate = rate >= e.lo && rate <= e.hi;
+    const okTurn = turn >= e.minTurn;
+    const name = DIFFICULTIES.find(d => d.id === id).name;
+    console.log(`${okRate && okTurn ? '通过' : '未过'}  ${name}  胜率 ${(rate * 100).toFixed(1)}% (期望 ${e.lo * 100}~${e.hi * 100}%)  平均胜局 ${turn} 回合 (≥${e.minTurn})`);
+    if (!okRate || !okTurn) failed++;
+  }
+  if (failed) {
+    console.error(`平衡回归未通过：${failed} 档越界`);
+    process.exitCode = 1;
+  } else {
+    console.log('平衡回归通过');
   }
 }

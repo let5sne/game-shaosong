@@ -1,6 +1,8 @@
-import { HEROES, TERRAIN_LABEL, DIFFICULTIES, riverBetween } from './data.js';
-import { previewBattle, supplyMap, troopCap } from './rules.js';
-import { readSave, writeSave, clearSave, saveInfo, restore } from './save.js';
+import { HEROES, HERO_USE, TERRAIN_LABEL, DIFFICULTIES, riverBetween } from './data.js';
+import {
+  previewBattle, supplyMap, troopCap, MAX_CHARGE, VICTORY_JIN_LIMIT, VICE_COST_GOLD,
+} from './rules.js';
+import { readSave, writeSave, clearSave, saveInfo, restore, serialize } from './save.js';
 import {
   chooseAction, applyAction, chooseEvent, newTurnContext, phaseOf,
 } from './autoplay.js';
@@ -15,6 +17,7 @@ const TEMPLATE = `
     <div class="era" id="eraText"></div>
     <div class="stats" id="topStats"></div>
     <div class="top-tools">
+      <button class="tool" data-act="undo" id="undoBtn" title="悔棋 · 撤回上一令（Z / Ctrl+Z）" disabled>↶</button>
       <button class="tool" data-act="help" title="玩法说明">？</button>
       <button class="tool" data-act="mute" id="muteBtn" title="音效开关">♪</button>
       <button class="tool" data-act="reset-cam" title="复位视角">⌖</button>
@@ -36,6 +39,12 @@ const TEMPLATE = `
 
   <div class="mode-hint" id="modeHint" hidden></div>
   <div class="toast-wrap" id="toastWrap"></div>
+
+  <div class="mobile-tabs" id="mobileTabs">
+    <button data-act="drawer" data-id="none" class="active">舆图</button>
+    <button data-act="drawer" data-id="left">大计 · 朝局</button>
+    <button data-act="drawer" data-id="right">州郡 · 军政</button>
+  </div>
 
   <div class="auto-hud" id="autoHud" hidden>
     <div class="auto-line">
@@ -92,14 +101,14 @@ const TEMPLATE = `
     <div class="help-grid">
       <section><h3>一、大局</h3><p>靖康之后，宋据江左，金占中原。你每回合有若干<b>政令</b>，用于整军、筹粮、进军、拜将等。点「结束回合」后，度支结算、金军行动、随机事件依次发生。</p></section>
       <section><h3>二、用兵与推演</h3><p>先点选一座己方州郡，再按「进军」，右栏即列出<b>进兵推演</b>：每个相邻州郡的胜算、攻守势区间、克城后存兵、政令与粮耗，以及士气／战法／渡河／补给／地形的逐项拆解，点一行便可下令；州郡索引的城名后也标了胜算。攻金城即攻城战，攻己城为移防。每城每回合只可整军一次，且受<b>兵额</b>所限；克城后损兵甚重，须就地休整。临阵双方各有浮动，胜算并非必胜之数。</p></section>
-      <section><h3>三、朝局</h3><p>主战威望高则政令多、军心盛；主和过盛则北伐之议渐寝。任命都督会明显改变朝局。民心决定粮赋，士气决定攻势，粮尽则军自溃。</p></section>
-      <section><h3>四、胜败</h3><p><b>胜</b>：收复东京开封与燕京（或尽逐金人）。<b>败</b>：临安／建康失守、民心归零、连岁乏粮，或于回合上限内未竟全功。开场页可择<b>三档国势</b>：宽和、本色、艰险，分别改金军兵势、仓廪、回合上限与开局变局；每局另有两条随机变局，局号注于战报与「北伐大计」。</p></section>
-      <section><h3>五、操作</h3><p>拖拽旋转舆图、滚轮缩放、右键平移、点选州郡。<kbd>空格</kbd>结束回合，<kbd>Esc</kbd>取消进军，<kbd>H</kbd>打开本页，<kbd>R</kbd>复位视角，<kbd>A</kbd>开关托管推演。局面<b>逐令自动存档</b>，刷新或关机后自开场页「续上一局」接续；终局清档。</p></section>
-      <section><h3>六、节律</h3><p>金骑只在<b>秋、冬</b>南牧，春夏淮上暂宁，正是整军北伐的窗口。<b>冬季黄河冰合</b>，涉水之阻与据河之利俱减，金骑踏冰可南，须早为之备。先取徐州、蔡州等外围，再图开封；「御驾亲征」叠加都督加成可破坚城。久不北伐则主和日盛——偏安拖不出中兴。</p></section>
+      <section><h3>三、朝局</h3><p>主战威望高则政令多、军心盛；主和过盛则北伐之议渐寝。任命都督会明显改变朝局。民心决定粮赋，士气决定攻势，粮尽则军自溃。<b>朝议前后相因</b>：秦桧留置阙下，方有和议之诏；和议既定，又及岳侯兵柄。某些选项会留下长久后果，并随存档保留，不同裁断将走向不同的朝局。</p></section>
+      <section><h3>四、胜败</h3><p><b>胜</b>：收复东京开封与燕京，并把金人所据州郡压到 ${VICTORY_JIN_LIMIT} 州以内（或尽逐金人）；只取两京而中原残敌尚众，不算中兴。<b>败</b>：临安／建康失守、民心归零、连岁乏粮，或于回合上限内未竟全功。开场页可择<b>三档国势</b>：宽和、本色、艰险，分别改金军兵势、仓廪、回合上限与开局变局；每局另有两条随机变局，局号注于战报与「北伐大计」。</p></section>
+      <section><h3>五、操作</h3><p>拖拽旋转舆图、滚轮缩放、右键平移、点选州郡。<kbd>空格</kbd>结束回合，<kbd>Esc</kbd>取消进军，<kbd>H</kbd>打开本页，<kbd>R</kbd>复位视角，<kbd>A</kbd>开关托管推演，<kbd>Z</kbd>／<kbd>Ctrl+Z</kbd>（或顶栏 <b>↶</b>）<b>悔棋</b>撤回上一令，可连退至多 20 步；托管推演中不可悔。窄屏下三栏改作<b>底部抽屉</b>，点底栏「大计／州郡／舆图」切换。音效开关会被记住。局面<b>逐令自动存档</b>，刷新或关机后自开场页「续上一局」接续；终局清档。以 <b>?seed=123456</b> 打开可固定局号，重演同一份变局与战报。三维舆图按设备自动择<b>性能档</b>（DPR 上限、阴影、植被密度），可加 <b>?quality=low</b> 手动降档；系统开启「减弱动效」时波光与旗面静止。</p></section>
+      <section><h3>六、节律</h3><p>金骑只在<b>秋、冬</b>南牧，春夏淮上暂宁，正是整军北伐的窗口。<b>冬季黄河冰合</b>，涉水之阻与据河之利俱减，金骑踏冰可南，须早为之备。先取徐州、蔡州等外围，再图开封；「御驾亲征」叠加都督加成可破坚城，然须两道政令、每局至多 ${MAX_CHARGE} 次，且黄旗一动，金人益知我主力所在。久不北伐则主和日盛——偏安拖不出中兴。</p></section>
       <section><h3>七、托管推演</h3><p>开场页按「托管推演」，或局中按顶栏 <b>▶</b>／<kbd>A</kbd>，便由 AI 代为临朝，逐回合决策，直至克复两京。托管守<b>三段战略</b>：固淮北 → 复旧都 → 取燕云；每回合至多两度进军、两处整军。可暂停、切换 ×1／×3／×8 倍速、随时停止接手。若一局失利会自动重整山河再北伐。</p></section>
       <section><h3>八、推演公允</h3><p>托管与官家用的是<b>同一套规则、同一份粮账、同一个随机数</b>，没有隐藏兵力或暗改判定；它只是把攻守之势算得更准、更不肯冒险。托管中的战报、事件裁断与三维行军，与你亲手所下之令并无二致。</p></section>
-      <section><h3>九、山河与粮道</h3><p>黄河、淮河、长江、钱塘各有<b>津渡</b>。凡涉水进军，攻势受挫、守方据河得利，且须多下<b>一道政令</b>并添舟楫粮耗；<b>水师</b>都督或御驾亲征可免那道政令。州郡须由己方城池连成一线通向行在，方为<b>粮道通</b>；否则即为孤城——岁赋折半、兵额减半、士气渐堕、久戍逃亡，出兵与守备俱受损。相邻己城越多，<b>连营犄角</b>越厚。开局长安便孤悬敌后，唯有打通洛阳、邓州一线方能接上粮道。</p></section>
-      <section><h3>十、战法与督军</h3><p>八位都督各有<b>战法</b>：岳飞步阵利于平原，韩世忠水师济河，吴玠据险擅长山险且能持孤军，刘锜婴城固守，张俊广兵额，李纲、赵鼎理政足食，秦桧则军备废弛。故渡淮之时宜任水师，转入中原平原则改任步阵。择一己方州郡下「<b>督军</b>」令，都督持节驻此：自本城出兵战法加倍，本城守备益固；换将或该城失守，驻节即废。</p></section>
+      <section><h3>九、山河与粮道</h3><p>黄河、淮河、长江、钱塘各有<b>津渡</b>。凡涉水进军，攻势受挫、守方据河得利，且须多下<b>一道政令</b>并添舟楫粮耗；<b>水师</b>都督或御驾亲征可免那道政令。州郡须由己方城池连成一线通向行在，方为<b>粮道通</b>；否则即为孤城——岁赋折半、兵额减半、士气渐堕、久戍逃亡，出兵与守备俱受损。相邻己城越多，<b>连营犄角</b>越厚。开局长安便孤悬敌后，唯有打通洛阳、邓州一线方能接上粮道。<b>粮道越远，转运越贵</b>：自深入中原的州郡出兵，每营耗粮随距行在的跳数递增，故北伐愈深，愈须先积谷、再进兵。</p></section>
+      <section><h3>十、战法与分路督军</h3><p>八位都督各有<b>战法</b>：岳飞步阵利于平原，韩世忠水师济河，吴玠据险擅长山险且能持孤军，刘锜婴城固守，张俊广兵额，李纲、赵鼎理政足食，秦桧则军备废弛。故渡淮之时宜任水师，转入中原平原则改任步阵。择一己方州郡下「<b>督军</b>」令，都督持节驻此：自本城出兵战法加倍，本城守备益固；换将或该城失守，驻节即废。<b>两路分镇</b>：拜主帅后可于左栏切到「拜分路」，再择一将（耗缗钱 ${VICE_COST_GOLD}）别当一面——分帅战法只及驻节本城，全局粮赋、兵额与朝政仍归主帅，且每回合另耗 2 粮、主和 +2；一州不置二节，亦可「罢」其幕府。守势吃紧时以刘锜、吴玠分镇，孤城未通粮道则以赵鼎，皆有其时。</p></section>
     </div>
     <button class="btn-primary" data-act="close-help">领旨</button>
   </div>
@@ -107,8 +116,15 @@ const TEMPLATE = `
 `;
 
 // ── 轻音效 ──────────────────────────────────────────────────
+const MUTE_KEY = 'shaosong.muted';
+function readMute() {
+  try { return localStorage.getItem(MUTE_KEY) === '1'; } catch (_) { return false; }
+}
+function writeMute(v) {
+  try { localStorage.setItem(MUTE_KEY, v ? '1' : '0'); } catch (_) { /* 隐私模式 */ }
+}
 let audioCtx = null;
-let muted = false;
+let muted = readMute();
 function sfx(kind) {
   if (muted) return;
   try {
@@ -135,13 +151,14 @@ function sfx(kind) {
 const $ = (root, sel) => root.querySelector(sel);
 const esc = s => String(s).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
 const DIFF_KEY = 'shaosong.difficulty';
+const TIP_KEY = 'shaosong.tipped';
 const readDiff = () => {
   try { const v = localStorage.getItem(DIFF_KEY); return DIFFICULTIES.some(d => d.id === v) ? v : 'normal'; }
   catch (_) { return 'normal'; }
 };
 const writeDiff = v => { try { localStorage.setItem(DIFF_KEY, v); } catch (_) { /* 隐私模式 */ } };
 
-export function createUI(root, state) {
+export function createUI(root, state, opts = {}) {
   root.innerHTML = TEMPLATE;
   const el = {
     era: $(root, '#eraText'), stats: $(root, '#topStats'),
@@ -159,15 +176,23 @@ export function createUI(root, state) {
     autoStop: $(root, '#autoStop'),
     diffRow: $(root, '#diffRow'), diffDesc: $(root, '#diffDesc'),
     variantNote: $(root, '#variantNote'), continueBtn: $(root, '#continueBtn'),
+    undoBtn: $(root, '#undoBtn'), mobileTabs: $(root, '#mobileTabs'),
   };
 
   let world = null;
   let selected = null;
   let marchFrom = null;
-  let logCollapsed = false;
+  const narrow = () => window.matchMedia?.('(max-width: 760px)')?.matches ?? false;
+  let logCollapsed = narrow();   // 窄屏默认收起战报，把舆图留给手指
+  const undoStack = [];         // 玩家之令前的纯数据快照，托管不记
+  const UNDO_MAX = 20;
   let chosenDifficulty = readDiff();
+  let heroRoute = 'main';   // 拜将列表当前选的是「主帅」还是「分路」
   let started = false;
   let saveTimer = null;
+  // 指定局号时每一局都重演同一起点，便于复现战报与调试；未指定则每局随机
+  const fixedSeed = Number.isFinite(opts.seed) ? opts.seed : null;
+  const resetOpts = extra => ({ ...extra, ...(fixedSeed !== null ? { seed: fixedSeed } : {}) });
 
   // 托管推演状态
   const auto = {
@@ -208,6 +233,42 @@ export function createUI(root, state) {
   function flushSave() {
     clearTimeout(saveTimer);
     if (started && !state.over) writeSave(state);
+  }
+
+  // ── 悔棋：快照是纯数据，restore 写回同一实例，listeners 与舆图都不必重建 ──
+  function updateUndoTool() {
+    if (!el.undoBtn) return;
+    el.undoBtn.disabled = auto.running || undoStack.length === 0;
+    el.undoBtn.title = undoStack.length
+      ? `悔棋 · 可退 ${undoStack.length} 步（Z / Ctrl+Z）` : '悔棋 · 尚无指令';
+  }
+  function pushUndo() {
+    if (auto.running || !started || state.over) return;
+    undoStack.push(serialize(state));
+    if (undoStack.length > UNDO_MAX) undoStack.shift();
+    updateUndoTool();
+  }
+  function undo() {
+    if (auto.running) { toast('托管推演中，请先停止托管。'); return; }
+    if (!undoStack.length) { toast('已无可悔之令。'); return; }
+    const raw = undoStack.pop();
+    if (!restore(state, raw)) { toast('悔棋失败，快照不可读。', 'bad'); return; }
+    marchFrom = null;
+    el.endModal.hidden = true;
+    el.eventModal.hidden = true;
+    render();
+    if (state.pendingEvent) showEvent(state.pendingEvent);
+    persist();
+    updateUndoTool();
+    toast('已撤回上一令。');
+    sfx('click');
+  }
+  function firstTip() {
+    try {
+      if (localStorage.getItem(TIP_KEY)) return;
+      localStorage.setItem(TIP_KEY, '1');
+    } catch (_) { return; }
+    toast('先点选<b>己方州郡</b>，再按「进军」看胜算推演；<kbd>H</kbd> 看玩法，<kbd>空格</kbd>结束回合，<kbd>↶</kbd> 可悔棋。');
   }
 
   /** 进军模式：把 battle() 的算盘摊成可点选的推演列表 */
@@ -290,19 +351,32 @@ export function createUI(root, state) {
       </section>
 
       <section class="card heroes">
-        <div class="card-eyebrow">都督诸军事</div>
-        <div class="hero-current">${hero ? `<b>${hero.name}</b><span>${hero.title} · 攻势 ${hero.atk >= 0 ? '+' : ''}${Math.round(hero.atk * 100)}%</span>` : '<b>阙员</b><span>未拜都督，诸军不相统属</span>'}</div>
-        ${hero?.art ? `<div class="art-line"><b>${esc(hero.art.name)}</b><span>${esc(hero.art.desc)}</span></div>` : ''}
-        <div class="station-line ${s.heroCity ? 'on' : ''}">${s.heroCity ? `持节驻 <b>${esc(s.cities[s.heroCity]?.name || '—')}</b> · 本路战法 ×1.6、城守 +12%` : '未驻节 · 战法仅得常效，可于州郡面板命其持节'}</div>
+        <div class="card-eyebrow">都督诸军事 <span class="decree-pip">两路分镇</span></div>
+        <div class="hero-current">${hero ? `<b>${hero.name}</b><span>主帅 · ${hero.title} · 攻势 ${hero.atk >= 0 ? '+' : ''}${Math.round(hero.atk * 100)}%</span>` : '<b>阙员</b><span>未拜主帅，诸军不相统属</span>'}</div>
+        ${hero?.art ? `<div class="art-line"><b>${esc(hero.art.name)}</b><span>${esc(hero.art.desc)}（全军常效）</span></div>` : ''}
+        <div class="station-line ${s.heroCity ? 'on' : ''}">${s.heroCity ? `主帅持节驻 <b>${esc(s.cities[s.heroCity]?.name || '—')}</b> · 本城战法 ×1.6、城守 +12%` : '主帅未驻节 · 战法仅得常效'}</div>
+        ${s.viceHero ? `
+          <div class="hero-current vice"><b>${s.viceHero.name}</b><span>分路 · ${s.viceHero.title}</span><button class="vice-dismiss" data-act="vice-dismiss" title="罢分路幕府，省下每回合粮耗">罢</button></div>
+          <div class="art-line"><b>${esc(s.viceHero.art?.name || '诸军')}</b><span>${esc(s.viceHero.art?.desc || '')}（只及驻节本城）</span></div>
+          <div class="station-line ${s.viceHeroCity ? 'on' : ''}">${s.viceHeroCity ? `分帅持节驻 <b>${esc(s.cities[s.viceHeroCity]?.name || '—')}</b> · 本城战法 ×1.6、城守 +12%` : '分帅未驻节 · 须于州郡面板命其持节'}</div>`
+          : '<div class="station-line">未置分路 · 拜主帅后可再择一将别镇一路（每回合加耗 2 粮、主和 +2）</div>'}
+        <div class="hero-route-row">
+          <button data-act="hero-route" data-route="main" class="${heroRoute === 'main' ? 'active' : ''}">拜主帅</button>
+          <button data-act="hero-route" data-route="vice" class="${heroRoute === 'vice' ? 'active' : ''}" ${hero ? '' : 'disabled'}>拜分路 · ${VICE_COST_GOLD} 钱</button>
+        </div>
         <div class="hero-list">
-          ${HEROES.map(h => `
-            <button class="hero-item ${s.heroId === h.id ? 'active' : ''}" data-act="hero" data-id="${h.id}" title="${esc(h.desc)}｜战法：${esc(h.art?.name || '—')} ${esc(h.art?.desc || '')}">
+          ${HEROES.map(h => {
+            const active = heroRoute === 'vice' ? s.viceHeroId === h.id : s.heroId === h.id;
+            const taken = heroRoute === 'vice' ? s.heroId === h.id : s.viceHeroId === h.id;
+            return `
+            <button class="hero-item ${active ? 'active' : ''} ${taken ? 'taken' : ''}" data-act="hero" data-id="${h.id}" data-route="${heroRoute}" title="${esc(h.desc)}｜战法：${esc(h.art?.name || '—')} ${esc(h.art?.desc || '')}${taken ? '｜已领另一路' : ''}｜宜：${esc(HERO_USE[h.id] || '')}">
               <span class="hero-name">${h.name}</span>
               <span class="hero-tag ${h.faction === '主和' ? 'he' : h.faction === '主战' ? 'zhan' : ''}">${h.faction}</span>
               <span class="hero-meta">${esc(h.art?.short || '')}</span>
-            </button>`).join('')}
+            </button>`;
+          }).join('')}
         </div>
-        <p class="card-note">任命耗政令 1 道并牵动朝局；换将则旧日驻节作废。</p>
+        <p class="card-note">八员各有其时（悬停可看）：平原用步阵、水网用水师、守势吃紧用城守、孤城用据险；粮紧用漕运、政令不足用庙算、兵额常满用众兵——文臣任分路时补半额政令与漕粮。主帅总戎事，战法与朝政及于全军；分帅只节制驻节本城，另置幕府耗缗钱与粮，且诸将分镇、主和渐长。一州不置二节，换将则旧驻节作废。</p>
       </section>
     `;
 
@@ -318,10 +392,21 @@ export function createUI(root, state) {
       march: c && c.owner === 'song' && s.decree >= 1 && s.grain >= 12,
       chouliang: s.decree >= 1,
       anfu: s.decree >= 1 && s.grain >= 15,
-      qinzheng: s.decree >= 1 && !s.charge,
+      qinzheng: s.decree >= 2 && s.canQinzheng,
       heyi: s.decree >= 1 && s.gold >= 55,
     };
     const btn = (cmd, label, desc, ok) => `<button class="cmd ${ok ? '' : 'off'}" data-act="cmd" data-cmd="${cmd}" ${ok ? '' : 'disabled'}><b>${label}</b><span>${desc}</span></button>`;
+    const stationBtn = (route, h, atCity, cityId) => {
+      const here = atCity === cityId;
+      const other = route === 'main' ? s.viceHeroCity : s.heroCity;
+      const blocked = other === cityId;
+      return `<button class="station-btn ${here ? 'active' : ''} ${route === 'vice' ? 'vice' : ''}"
+          data-act="dujun" data-route="${route}" data-id="${cityId}"
+          ${here || blocked || s.decree < 1 || s.over ? 'disabled' : ''}>
+          ${here ? `✔ ${esc(h.name)}持节驻此` : blocked ? '他路已持节此州' : `命${esc(h.name)}驻节此州`}
+          <em>${here ? '已驻节' : blocked ? '一州不置二节' : route === 'vice' ? '分路 · 1 道政令' : '主帅 · 1 道政令'}</em>
+        </button>`;
+    };
 
     el.right.innerHTML = `
       <section class="card city-card">
@@ -343,10 +428,10 @@ export function createUI(root, state) {
             <div><span>粮道</span><b class="txt ${c.owner === 'song' && !linked ? 'warn' : ''}">${c.owner === 'song' ? (linked ? '通行在' : '断绝') : '金据'}</b></div>
             <div><span>连营</span><b class="txt">${sup.support[c.id] || 0} 处</b></div>
           </div>
-          ${c.owner === 'song' && s.hero ? `
-            <button class="station-btn ${s.heroCity === c.id ? 'active' : ''}" data-act="dujun" data-id="${c.id}" ${s.heroCity === c.id || s.decree < 1 || s.over ? 'disabled' : ''}>
-              ${s.heroCity === c.id ? `✔ ${esc(s.hero.name)}持节驻此` : `命${esc(s.hero.name)}驻节此州`}<em>${s.heroCity === c.id ? '已驻节' : '耗政令 1 道'}</em>
-            </button>` : ''}
+          ${c.owner === 'song' ? `
+            ${s.hero ? stationBtn('main', s.hero, s.heroCity, c.id) : ''}
+            ${s.viceHero ? stationBtn('vice', s.viceHero, s.viceHeroCity, c.id) : ''}
+          ` : ''}
           <div class="link-label">官道所通 <span class="link-legend">· 蓝字为津渡，金城后标胜算</span></div>
           <div class="link-list">${c.links.map(id => {
             const n = s.cities[id];
@@ -382,7 +467,7 @@ export function createUI(root, state) {
           ${btn('march', '进军', c && c.owner === 'song' ? '点选相邻州郡' : '先择己方州郡', can.march)}
           ${btn('chouliang', '筹粮', '+40 粮 · 民心 -4', can.chouliang)}
           ${btn('anfu', '安抚', '15 粮 · 民心 +9', can.anfu)}
-          ${btn('qinzheng', '御驾亲征', '本回合攻势 +25%', can.qinzheng)}
+          ${btn('qinzheng', '御驾亲征', `2 政令 · 攻势 +25% · 余 ${Math.max(0, MAX_CHARGE - (s.chargeUsed || 0))} 次`, can.qinzheng)}
           ${btn('heyi', '遣使和议', '55 钱 · 缓兵两回合', can.heyi)}
         </div>
       </section>
@@ -406,8 +491,8 @@ export function createUI(root, state) {
     }
 
     el.right.classList.toggle('marching', !!marchFrom);
+    // setSelection 内部已同步一次舆图状态；勿再调 update，托管时每步都会放大成双倍重绘
     world?.setSelection(selected, marchFrom ? s.cities[marchFrom].links : []);
-    world?.update(s);
     updateAutoHud();
   }
 
@@ -512,9 +597,11 @@ export function createUI(root, state) {
 
   function startAuto() {
     if (auto.running) return;
+    undoStack.length = 0;   // 托管与手动不共用悔棋栈
+    updateUndoTool();
     if (!started) {
       started = true;
-      state.reset({ difficulty: chosenDifficulty });
+      state.reset(resetOpts({ difficulty: chosenDifficulty }));
     }
     hideIntro();
     el.helpModal.hidden = true;
@@ -568,6 +655,7 @@ export function createUI(root, state) {
   }
 
   function doMarch(fromId, toId) {
+    pushUndo();
     marchFrom = null;
     sfx('war');
     state.jinjun(fromId, toId);
@@ -595,6 +683,7 @@ export function createUI(root, state) {
 
   function runCmd(cmd) {
     if (auto.running || state.over || state.pendingEvent) return;
+    if (cmd !== 'march') pushUndo();   // 「进军」只切换推演视图，真正下令在 doMarch
     const before = state.logs[0];
     let ok = false;
     switch (cmd) {
@@ -631,6 +720,15 @@ export function createUI(root, state) {
     if (!btn) return;
     const act = btn.dataset.act;
 
+    // 悔棋与窄屏抽屉在托管时仍可查看，但悔棋本身会自行拦下
+    if (act === 'undo') { undo(); return; }
+    if (act === 'drawer') {
+      root.dataset.drawer = btn.dataset.id;
+      el.mobileTabs.querySelectorAll('button').forEach(b => b.classList.toggle('active', b === btn));
+      sfx('click');
+      return;
+    }
+
     // 托管控制始终可用
     if (act === 'auto' || act === 'auto-start') { toggleAuto(); return; }
     if (act === 'auto-pause') {
@@ -654,11 +752,14 @@ export function createUI(root, state) {
 
     if (act === 'start') {
       started = true;
-      state.reset({ difficulty: chosenDifficulty });
+      state.reset(resetOpts({ difficulty: chosenDifficulty }));
+      undoStack.length = 0;
+      updateUndoTool();
       hideIntro();
       render();
       persist();
       sfx('event');
+      firstTip();
       return;
     }
     if (act === 'continue') {
@@ -668,6 +769,8 @@ export function createUI(root, state) {
         return;
       }
       started = true;
+      undoStack.length = 0;
+      updateUndoTool();
       chosenDifficulty = state.difficulty;
       writeDiff(chosenDifficulty);
       selected = null;
@@ -704,6 +807,7 @@ export function createUI(root, state) {
     if (act === 'close-help') { el.helpModal.hidden = true; sfx('click'); return; }
     if (act === 'mute') {
       muted = !muted;
+      writeMute(muted);
       el.muteBtn.textContent = muted ? '♪̸' : '♪';
       el.muteBtn.classList.toggle('off', muted);
       return;
@@ -716,16 +820,25 @@ export function createUI(root, state) {
     }
     if (act === 'cancel-march') { cancelMarch(); return; }
     if (act === 'pick') { handlePick(btn.dataset.id); world?.focusCity(btn.dataset.id); return; }
+    if (act === 'hero-route') {
+      heroRoute = btn.dataset.route === 'vice' ? 'vice' : 'main';
+      render(); sfx('click'); return;
+    }
+    if (act === 'vice-dismiss') { pushUndo(); state.dismissVice(); sfx('click'); return; }
     if (act === 'hero') {
-      if (state.heroId === btn.dataset.id) { toast('已总戎事。'); return; }
-      state.renming(btn.dataset.id);
+      const route = btn.dataset.route === 'vice' ? 'vice' : 'main';
+      const current = route === 'vice' ? state.viceHeroId : state.heroId;
+      if (current === btn.dataset.id) { toast('此公已领这一路。'); return; }
+      pushUndo();
+      state.renming(btn.dataset.id, route);
       sfx('event');
       return;
     }
-    if (act === 'dujun') { state.dujun(btn.dataset.id); sfx('event'); return; }
+    if (act === 'dujun') { pushUndo(); state.dujun(btn.dataset.id, btn.dataset.route); sfx('event'); return; }
     if (act === 'cmd') { runCmd(btn.dataset.cmd); return; }
     if (act === 'end-turn') {
       if (state.over || state.pendingEvent) return;
+      pushUndo();
       marchFrom = null;
       sfx('click');
       state.endTurn();
@@ -734,6 +847,7 @@ export function createUI(root, state) {
     }
     if (act === 'event-opt') {
       const i = Number(btn.dataset.i);
+      pushUndo();
       el.eventModal.hidden = true;
       state.resolveEvent(i);
       sfx('click');
@@ -742,7 +856,9 @@ export function createUI(root, state) {
   });
 
   function restart(quiet = false) {
-    state.reset();
+    state.reset(resetOpts());
+    undoStack.length = 0;
+    updateUndoTool();
     chosenDifficulty = state.difficulty;
     writeDiff(chosenDifficulty);
     clearSave();
@@ -768,12 +884,19 @@ export function createUI(root, state) {
 
   window.addEventListener('keydown', e => {
     if (e.target.matches?.('input, textarea, select')) return;
+    // 组合键交还浏览器（Ctrl+A 全选、Ctrl+R 刷新等），唯 Ctrl/Cmd+Z 按玩法所述作悔棋。
+    // 否则 Ctrl+A 会在用户想全选文字时意外开启托管推演。
+    const undoKey = e.key === 'z' || e.key === 'Z';
+    const mod = e.ctrlKey || e.metaKey || e.altKey;
+    if (mod && !(undoKey && (e.ctrlKey || e.metaKey) && !e.altKey)) return;
+    if (undoKey) { e.preventDefault(); undo(); return; }
     if (e.key === 'Escape') {
       if (!el.helpModal.hidden) { el.helpModal.hidden = true; return; }
       if (marchFrom) { cancelMarch(); return; }
     }
-    if (e.key === 'a' || e.key === 'A') { toggleAuto(); return; }
+    // 弹窗／开场页期间不响应局内快捷键，A 尤其不能越过开场页直接起托管
     if (!el.helpModal.hidden || !el.eventModal.hidden || !el.endModal.hidden || !el.intro.hidden) return;
+    if (e.key === 'a' || e.key === 'A') { toggleAuto(); return; }
     if (e.code === 'Space') { e.preventDefault(); if (!state.over && !state.pendingEvent && !auto.running) { marchFrom = null; state.endTurn(); render(); } }
     if (e.key === 'h' || e.key === 'H') el.helpModal.hidden = false;
     if (e.key === 'r' || e.key === 'R') world?.resetCamera();
@@ -785,7 +908,7 @@ export function createUI(root, state) {
     sfx('event');
     el.eventBody.innerHTML = `
       <div class="event-card">
-        <div class="event-top"><span class="event-tag">${esc(ev.tag)}</span><span class="event-era">${esc(state.yearName)} · 第 ${state.turn} 回合</span></div>
+        <div class="event-top"><span class="event-tag">${esc(ev.tag)}</span>${ev.priority ? '<span class="event-chain">前后相因</span>' : ''}<span class="event-era">${esc(state.yearName)} · 第 ${state.turn} 回合</span></div>
         <h2>${esc(ev.title)}</h2>
         <div class="event-rule"></div>
         <p class="event-text">${esc(ev.text)}</p>
@@ -831,12 +954,16 @@ export function createUI(root, state) {
   state.on('end', showEnd);
   state.on('march', payload => world?.march(payload));
 
+  root.dataset.drawer = 'none';
+  el.muteBtn.textContent = muted ? '♪̸' : '♪';
+  el.muteBtn.classList.toggle('off', muted);
+  updateUndoTool();
   render();
   renderIntro();
   window.addEventListener('pagehide', flushSave);
   document.addEventListener('visibilitychange', () => { if (document.hidden) flushSave(); });
   return {
-    attachWorld, render, handlePick, toast, sfx,
+    attachWorld, render, handlePick, toast, sfx, undo,
     startAuto, stopAuto, toggleAuto,
     get autoRunning() { return auto.running; },
   };
