@@ -94,7 +94,8 @@ const QUAD_FRAG = /* glsl */`
   }
 `;
 
-function makeInkTexture() {
+/** 径向柔边贴图：接触墨晕与植被落地软影共用，运行时生成、零外部资产。 */
+export function makeInkTexture() {
   const cv = document.createElement('canvas');
   cv.width = cv.height = 128;
   const ctx = cv.getContext('2d');
@@ -146,6 +147,9 @@ export function makeContactInk(cities, heightAt, { radius = () => 3.6, color = 0
   const mat = new THREE.MeshBasicMaterial({
     map: tex, color, transparent: true, opacity,
     depthWrite: false, side: THREE.DoubleSide,
+    // three 对 transparent+DoubleSide 默认分背面／正面两遍绘制，贴地圆盘只需一遍：
+    // 否则 24 城墨晕会白占 2 个 draw call、翻倍三角形。
+    forceSinglePass: true,
   });
   const mesh = new THREE.Mesh(geo, mat);
   mesh.renderOrder = 0.5;   // 先于海面（1）绘制，让水盖住伸到河滩的墨晕

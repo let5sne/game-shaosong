@@ -61,6 +61,76 @@ function frame(w, d, t, y, hex, dest) {
   dest.push(box(t, 0.05, d, w / 2, y, 0, hex));
   dest.push(box(t, 0.05, d, -w / 2, y, 0, hex));
 }
+/**
+ * 城池表面图集（public/textures/city-surface.png）的 UV 分带。
+ * PNG 上半是筒瓦瓦垄、下半是夯土砖缝，中间 8% 为纯白隔离带，
+ * 防止远处 mipmap 采样把两带混成一片灰。three 的 flipY 使 v=1 对应 PNG 首行。
+ */
+export const CITY_ATLAS_BANDS = Object.freeze({
+  roof: [0.54, 0.96],
+  wall: [0.04, 0.46],
+});
+
+/**
+ * 把单个部件的 UV 压进图集某一带。
+ * u 只做整数倍放大、不取 fract：UV 保持连续，交给 wrapS=Repeat 平铺，mipmap 导数不会在接缝处炸开。
+ * 只有 ?tex=1 / ?ctex=1 时才调用；默认不贴图时几何与原先逐字节一致。
+ */
+function atlasUv(g, band, repeatU = 1) {
+  const uv = g.attributes.uv;
+  if (!uv) return g;
+  const [v0, v1] = CITY_ATLAS_BANDS[band];
+  for (let i = 0; i < uv.count; i++) {
+    uv.setXY(i, uv.getX(i) * repeatU, v0 + uv.getY(i) * (v1 - v0));
+  }
+  uv.needsUpdate = true;
+  return g;
+}
+
+/**
+ * 廉价竖向环境光遮蔽：按局部高度与法线朝向给顶点色乘一个渐变，
+ * 让台基、柱脚、檐底比屋面／脊饰沉一些。只改 color，不碰 position / normal /
+ * uv / index，故 withAtlas 与否仍可逐字节比对。
+ * 均值刻意留在 1.0 附近（以 up=0.5 为轴上下对称），整体亮度不变，只重新分配明暗；
+ * 朝下的面（檐底、台基）额外压暗，体积感主要来自这一项。
+ */
+function verticalAOFactor(y, ny, refHeight, strength) {
+  const up = Math.max(0, Math.min(1, y / (refHeight * 0.85)));
+  const down = Math.max(0, -ny);
+  return Math.max(0.78, 1 + strength * (0.12 * (up - 0.5) - 0.18 * down));
+}
+
+/** 整组几何共用的归一化基准；不传则单块几何自身归一化。 */
+export function meanVerticalAO(geos, refHeight = 6, strength = 1) {
+  let sum = 0, n = 0;
+  for (const g of geos) {
+    const p = g.attributes.position, nn = g.attributes.normal;
+    for (let i = 0; i < p.count; i++) {
+      sum += verticalAOFactor(p.getY(i), nn ? nn.getY(i) : 0, refHeight, strength);
+      n++;
+    }
+  }
+  return n ? sum / n : 1;
+}
+
+export function applyVerticalAO(g, refHeight = 6, strength = 1, meanF = null) {
+  const p = g.attributes.position, n = g.attributes.normal, c = g.attributes.color;
+  if (!c) return g;
+  const fs = new Float32Array(c.count);
+  let sum = 0;
+  for (let i = 0; i < c.count; i++) {
+    fs[i] = verticalAOFactor(p.getY(i), n ? n.getY(i) : 0, refHeight, strength);
+    sum += fs[i];
+  }
+  const norm = meanF ?? (sum > 0 ? sum / c.count : 1);
+  for (let i = 0; i < c.count; i++) {
+    const f = fs[i] / norm;
+    c.setXYZ(i, c.getX(i) * f, c.getY(i) * f, c.getZ(i) * f);
+  }
+  c.needsUpdate = true;
+  return g;
+}
+
 function merge(list) {
   // 多面体是 non-indexed，其余是 indexed；统一补顺序索引，避免合并失败
   list.forEach(g => {
@@ -148,7 +218,8 @@ function spireRoof(size, h, x, y, z, hex) {
 }
 
 /** 正脊 + 两端鸱吻 */
-function ridgeParts(w, x, y, z, hex, list) {
+function ridgeParts(w, x, y, z, hex, list, roofSet = null) {
+  const start = list.length;
   const bright = new THREE.Color(hex).multiplyScalar(1.32);
   list.push(box(w + 0.20, 0.18, 0.22, x, y + 0.07, z, bright));
   for (const s of [-1, 1]) {
@@ -157,6 +228,7 @@ function ridgeParts(w, x, y, z, hex, list) {
     g.translate(x + s * (w / 2 + 0.06), y + 0.28, z);
     list.push(paint(g, C.trim));
   }
+  if (roofSet) for (let i = start; i < list.length; i++) roofSet.add(list[i]);
 }
 
 // ── 城池规格 ────────────────────────────────────────────────
@@ -177,9 +249,12 @@ export function cityTier(def) {
  * 返回 { solid, faction, flagPos:[x,y,z], pole:[x,y,z], height, half }
  * solid 使用白色材质 + 顶点色；faction 使用阵营材质 + 白色顶点色。
  */
-export function buildCityGeometry(tierIdx) {
+export function buildCityGeometry(tierIdx, withAtlas = false, withAO = false) {
   const T = TIERS[tierIdx];
   const A = [], F = [];
+  // 屋顶／屋脊部件单独标记（不另开数组），保证合并顺序与未贴图版本完全相同
+  const roofParts = new Set();
+  const addRoof = g => { A.push(g); roofParts.add(g); return g; };
   const half = T.half;
   const wallH = T.wallH;
   const baseTop = 0.42;                       // 台基顶
@@ -240,7 +315,7 @@ export function buildCityGeometry(tierIdx) {
       A.push(box(0.52, 0.34, 0.52, x, wallTop + 0.17, z, C.stone));
       A.push(box(0.38, 0.30, 0.38, x, wallTop + 0.49, z, C.lattice));
       for (const dx of [-0.16, 0.16]) A.push(box(0.045, 0.30, 0.045, x + dx, wallTop + 0.49, z + 0.19, C.wood));
-      A.push(spireRoof(0.76, 0.55, x, wallTop + 0.64, z, T.roofHex));
+      addRoof(spireRoof(0.76, 0.55, x, wallTop + 0.64, z, T.roofHex));
       A.push(cone(0.05, 0.16, x, wallTop + 1.24, z, C.trim, 4));
     }
   }
@@ -278,8 +353,8 @@ export function buildCityGeometry(tierIdx) {
   if (T.double) {
     // 重檐：下檐 → 平坐 → 上层小楼 → 上檐
     const lw = tw2 * 1.52;
-    A.push(roofGeo(lw, lw, 0.80, 0, lowerY, 0, T.roofHex, { upturn: 0.30, overhang: 0.20 }));
-    ridgeParts(lw * 0.34, 0, lowerY + 0.80, 0, T.roofHex, A);
+    addRoof(roofGeo(lw, lw, 0.80, 0, lowerY, 0, T.roofHex, { upturn: 0.30, overhang: 0.20 }));
+    ridgeParts(lw * 0.34, 0, lowerY + 0.80, 0, T.roofHex, A, roofParts);
     const upY = lowerY + 0.88;
     A.push(box(tw2 * 1.25, 0.14, tw2 * 1.25, 0, upY, 0, C.stoneDk));
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
@@ -287,20 +362,20 @@ export function buildCityGeometry(tierIdx) {
     }
     A.push(box(tw2 * 1.05, 0.46, tw2 * 1.05, 0, upY + 0.30, 0, C.lattice));
     const uw = tw2 * 1.16;
-    A.push(roofGeo(uw, uw, 0.95, 0, upY + 0.56, 0, T.roofHex, { upturn: 0.34, overhang: 0.18 }));
-    ridgeParts(uw * 0.34, 0, upY + 1.51, 0, T.roofHex, A);
+    addRoof(roofGeo(uw, uw, 0.95, 0, upY + 0.56, 0, T.roofHex, { upturn: 0.34, overhang: 0.18 }));
+    ridgeParts(uw * 0.34, 0, upY + 1.51, 0, T.roofHex, A, roofParts);
     roofTop = 2.39;
   } else {
     const rw = tw2 * 1.58;
-    A.push(roofGeo(rw, rw, 1.15, 0, lowerY, 0, T.roofHex, { upturn: 0.32, overhang: 0.20 }));
-    ridgeParts(rw * 0.34, 0, lowerY + 1.15, 0, T.roofHex, A);
+    addRoof(roofGeo(rw, rw, 1.15, 0, lowerY, 0, T.roofHex, { upturn: 0.32, overhang: 0.20 }));
+    ridgeParts(rw * 0.34, 0, lowerY + 1.15, 0, T.roofHex, A, roofParts);
     roofTop = 1.15;
   }
 
   // ⑤ 城内民居：几处小青瓦屋，避免城中空旷
   const house = (hx, hz, s) => {
     A.push(box(0.52 * s, 0.34 * s, 0.44 * s, hx, wallTop + 0.17 * s, hz, C.stone));
-    A.push(spireRoof(0.70 * s, 0.38 * s, hx, wallTop + 0.34 * s, hz, C.roof));
+    addRoof(spireRoof(0.70 * s, 0.38 * s, hx, wallTop + 0.34 * s, hz, C.roof));
   };
   house(-half * 0.58, -half * 0.58, 0.85);
   house(half * 0.58, -half * 0.58, 0.75);
@@ -314,6 +389,25 @@ export function buildCityGeometry(tierIdx) {
   A.push(cone(0.085, 0.30, px, poleTop + 0.15, pz, C.trim, 6));
   A.push(cone(0.09, 0.20, px, poleTop - 0.06, pz, 0x9c3b2e, 6));
 
+  // 仅在启用城池贴图时重映射 UV：墙／台基／木构压进夯土带，屋顶／屋脊压进瓦作带
+  //（屋顶沿周长铺 2 圈瓦垄）；阵营部件（门扇、压顶、栏板）压进夯土带，
+  // 让 24 城的所有部件共享同一份表面细节。未启用时不动任何顶点数据。
+  if (withAtlas) {
+    for (const g of A) {
+      const roof = roofParts.has(g);
+      atlasUv(g, roof ? 'roof' : 'wall', roof ? 2 : 1);
+    }
+    for (const g of F) atlasUv(g, 'wall', 1);
+  }
+  // 质感层：只重分配顶点色明暗，不改几何结构，故两种 UV 版本仍可逐字节比对
+  if (withAO) {
+    // 整城共用一个归一化基准：若每个小 box 各自归一化，单块内部高度差太小，
+    // AO 会被抹平成 1，屋檐／台基／柱脚的层次就出不来。
+    const parts = [...A, ...F];
+    const meanF = meanVerticalAO(parts, poleTop, 1);
+    for (const g of parts) applyVerticalAO(g, poleTop, 1, meanF);
+  }
+
   return {
     solid: merge(A),
     faction: merge(F),
@@ -324,9 +418,9 @@ export function buildCityGeometry(tierIdx) {
   };
 }
 
-/** 3 套规格共享几何 */
-export function buildCityLibrary() {
-  return [0, 1, 2].map(buildCityGeometry);
+/** 3 套规格共享几何；两个增强开关默认 false，保证 ?mat=0 时逐字节零回归 */
+export function buildCityLibrary(withAtlas = false, withAO = false) {
+  return [0, 1, 2].map(i => buildCityGeometry(i, withAtlas, withAO));
 }
 
 // ── 贴图 ────────────────────────────────────────────────────
@@ -474,24 +568,32 @@ export function makeFlagMaterial(tex, uTime, width) {
 }
 
 // ── 地表植被 / 营帐几何 ────────────────────────────────────
-export function pineGeometry() {
+export function pineGeometry(variant = 0) {
   const a = [];
-  a.push(cyl(0.07, 0.10, 0.72, 0, 0.36, 0, 0x6b543c, 5));
-  a.push(cone(0.48, 0.78, 0, 0.92, 0, 0x4d6b4c, 6));
-  a.push(cone(0.37, 0.68, 0, 1.34, 0, 0x5c7d56, 6));
-  a.push(cone(0.25, 0.55, 0, 1.72, 0, 0x6d9060, 6));
+  const k = variant ? 1.10 : 1;      // 变体更高瘦，另加一层偏冠
+  const s = variant ? 0.90 : 1;
+  a.push(cyl(0.07, 0.10, 0.72 * k, 0, 0.36 * k, 0, 0x6b543c, 5));
+  a.push(cone(0.48 * s, 0.78 * k, 0, 0.92 * k, 0, 0x4d6b4c, 6));
+  a.push(cone(0.37 * s, 0.68 * k, 0, 1.34 * k, 0, 0x5c7d56, 6));
+  a.push(cone(0.25 * s, 0.55 * k, 0, 1.72 * k, 0, 0x6d9060, 6));
+  if (variant) a.push(cone(0.16, 0.36, 0.13, 1.98 * k, 0.07, 0x7fa06e, 5));
   return merge(a);
 }
-export function broadGeometry() {
+export function broadGeometry(variant = 0) {
   const a = [];
   a.push(cyl(0.075, 0.11, 0.78, 0, 0.39, 0, 0x6b543c, 5));
-  const g = new THREE.IcosahedronGeometry(0.62, 0);
-  g.scale(1, 0.82, 1);
-  g.translate(0, 1.18, 0);
+  const g = new THREE.IcosahedronGeometry(variant ? 0.55 : 0.62, 0);
+  g.scale(1, variant ? 0.95 : 0.82, 1);
+  g.translate(0, variant ? 1.28 : 1.18, 0);
   a.push(paint(g, 0x6e9460));
-  const g2 = new THREE.IcosahedronGeometry(0.42, 0);
-  g2.translate(0.34, 0.92, 0.14);
+  const g2 = new THREE.IcosahedronGeometry(variant ? 0.50 : 0.42, 0);
+  g2.translate(variant ? -0.32 : 0.34, variant ? 1.02 : 0.92, variant ? 0.18 : 0.14);
   a.push(paint(g2, 0x7fa46c));
+  if (variant) {
+    const g3 = new THREE.IcosahedronGeometry(0.34, 0);
+    g3.translate(0.28, 1.46, -0.10);
+    a.push(paint(g3, 0x8aae76));
+  }
   return merge(a);
 }
 export function rockGeometry() {
@@ -500,6 +602,43 @@ export function rockGeometry() {
   g.translate(0, 0.24, 0);
   return paint(g, 0x9b9787);
 }
+/**
+ * 高清地貌档的碎岩体：二十面体细分后按顶点位置做确定性扰动，
+ * 保留低多边形棱面，但轮廓不再是规则球/十二面体。两套变体由 variant 区分。
+ * 顶点色只写灰白明暗（朝上更亮、侧面更暗），整体色由 instanceColor 乘上去。
+ */
+export function boulderGeometry(variant = 0) {
+  const src = new THREE.IcosahedronGeometry(1, 1);
+  const g = src.index ? src.toNonIndexed() : src;
+  if (g !== src) src.dispose();
+  const p = g.attributes.position;
+  const seed = variant * 17.31;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+    const n = Math.sin(x * 7.3 + seed) * Math.cos(z * 6.1 - seed) * Math.sin(y * 5.7 + seed * 0.7);
+    const chip = Math.sin(x * 13.7 + z * 11.3 + seed) * Math.cos(y * 12.1 - seed);
+    const r = 1 + n * 0.34 + chip * 0.13 + Math.sin(y * 3.1 + seed) * 0.13;
+    // 柔和削底：岩体坐在坡面上，但不留「切开的宝石」那种硬平面
+    const yy = y * r * 0.94;
+    p.setXYZ(i, x * r * 1.12,
+      (yy < -0.30 ? -0.30 + (yy + 0.30) * 0.25 : yy) + 0.06,
+      z * r * 0.90);
+  }
+  p.needsUpdate = true;
+  g.computeVertexNormals();
+  const nr = g.attributes.normal;
+  const arr = new Float32Array(p.count * 3);
+  const top = new THREE.Color(0xf0f2ec), side = new THREE.Color(0x868b83), c = new THREE.Color();
+  for (let i = 0; i < p.count; i++) {
+    const up = Math.max(0, Math.min(1, nr.getY(i) * 0.85 + 0.15));
+    c.copy(side).lerp(top, up * up);
+    const fleck = 0.94 + Math.abs(Math.sin(p.getX(i) * 9.1 + p.getZ(i) * 6.7 + seed)) * 0.09;
+    arr[i * 3] = c.r * fleck; arr[i * 3 + 1] = c.g * fleck; arr[i * 3 + 2] = c.b * fleck;
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(arr, 3));
+  return g;
+}
+
 export function tentGeometry() {
   const a = [];
   a.push(cyl(0.40, 0.43, 0.10, 0, 0.05, 0, 0xffffff, 6));
@@ -525,3 +664,116 @@ export function mountainClusterGeometry(seed = 1) {
   return merge(a);
 }
 function hash2(a, b) { const n = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453; return n - Math.floor(n); }
+
+// ── Blender 离线资产 ──────────────────────────────────────────
+/**
+ * 极简 glTF 2.0 GLB 读取：只处理本项目 Blender 导出的静态网格。
+ * 支持 POSITION / NORMAL / COLOR_0 / 索引；贴图、动画、蒙皮、稀疏访问器不支持。
+ * 两个静态网格不值得引入整个 GLTFLoader（会把 three 主包撑大 85 KB）。
+ */
+export function readUnitsGlb(buf) {
+  const dv = new DataView(buf);
+  if (dv.getUint32(0, true) !== 0x46546c67) throw new Error('不是 GLB 文件');
+  let off = 12, json = null, bin = null;
+  while (off + 8 <= dv.byteLength) {
+    const len = dv.getUint32(off, true);
+    const type = dv.getUint32(off + 4, true);
+    const start = off + 8;
+    if (type === 0x4e4f534a) json = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, start, len)));
+    else if (type === 0x004e4942) bin = new Uint8Array(buf, start, len);
+    off = start + len;
+  }
+  if (!json || !bin) throw new Error('GLB 缺少 JSON 或 BIN chunk');
+
+  const COMP = { 5121: Uint8Array, 5123: Uint16Array, 5125: Uint32Array, 5126: Float32Array };
+  const WIDTH = { 5121: 1, 5123: 2, 5125: 4, 5126: 4 };
+  const NUM = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4, MAT4: 16 };
+
+  function accessor(i) {
+    const a = json.accessors[i];
+    const Arr = COMP[a.componentType];
+    if (!Arr) throw new Error(`不支持的 componentType ${a.componentType}`);
+    const n = NUM[a.type];
+    const view = json.bufferViews[a.bufferView];
+    const stride = view.byteStride || n * WIDTH[a.componentType];
+    const base = (view.byteOffset || 0) + (a.byteOffset || 0);
+    const count = a.count;
+    if (stride === n * WIDTH[a.componentType]) {
+      return new Arr(bin.buffer, bin.byteOffset + base, count * n);
+    }
+    const out = new Arr(count * n);          // 交错存储：逐元素展开
+    for (let k = 0; k < count; k++) {
+      out.set(new Arr(bin.buffer, bin.byteOffset + base + k * stride, n), k * n);
+    }
+    return out;
+  }
+
+  const out = {};
+  for (const mesh of json.meshes) {
+    const p = mesh.primitives[0];
+    if (p.mode !== undefined && p.mode !== 4) throw new Error('仅支持三角形网格');
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(accessor(p.attributes.POSITION), 3));
+    if (p.attributes.NORMAL !== undefined) {
+      geo.setAttribute('normal', new THREE.BufferAttribute(accessor(p.attributes.NORMAL), 3));
+    }
+    if (p.attributes.COLOR_0 !== undefined) {
+      const a = json.accessors[p.attributes.COLOR_0];
+      const src = accessor(p.attributes.COLOR_0);
+      const n = NUM[a.type];
+      const norm = a.normalized ? 1 / (2 ** (8 * WIDTH[a.componentType]) - 1) : 1;
+      const rgb = new Float32Array(a.count * 3);
+      for (let k = 0; k < a.count; k++) {
+        rgb[k * 3] = src[k * n] * norm;
+        rgb[k * 3 + 1] = src[k * n + 1] * norm;
+        rgb[k * 3 + 2] = src[k * n + 2] * norm;
+      }
+      geo.setAttribute('color', new THREE.BufferAttribute(rgb, 3));
+    }
+    if (p.indices !== undefined) geo.setIndex(new THREE.BufferAttribute(accessor(p.indices), 1));
+    if (!geo.attributes.normal) geo.computeVertexNormals();
+    geo.computeBoundingBox();
+    out[mesh.name] = geo;
+  }
+  return out;
+}
+
+/** 加载 public/models/units.glb；失败时抛错，由调用方回退到程序化几何。 */
+export async function loadUnitLibrary() {
+  const url = new URL('models/units.glb', document.baseURI).href;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`units.glb HTTP ${res.status}`);
+  const geos = readUnitsGlb(await res.arrayBuffer());
+  if (!geos.Rider && !geos.Siege) throw new Error('GLB 中没有可用网格');
+  return geos;
+}
+
+/** 加载 public/models/capitals.glb：两京主角级增饰，与上面共用同一个解析器。 */
+export async function loadCapitalLibrary() {
+  const url = new URL('models/capitals.glb', document.baseURI).href;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`capitals.glb HTTP ${res.status}`);
+  const geos = readUnitsGlb(await res.arrayBuffer());
+  if (!geos.Kaifeng || !geos.Yanjing) throw new Error('GLB 缺少两京网格');
+  return geos;
+}
+
+/** 森林四种实例批次 → trees.glb 中的网格名；rock 批不参与替换。 */
+export const TREE_MESHES = Object.freeze({
+  pine: 'PineA', pineB: 'PineB', broad: 'BroadA', broadB: 'BroadB',
+});
+
+/**
+ * 加载 public/models/trees.glb：四套带枝干与层叠冠的可实例化树。
+ * 与 units/capitals 共用极简 GLB 解析器，缺任何一个网格都明确报错以便整片森林回退。
+ */
+export async function loadTreeLibrary() {
+  const url = new URL('models/trees.glb', document.baseURI).href;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`trees.glb HTTP ${res.status}`);
+  const geos = readUnitsGlb(await res.arrayBuffer());
+  for (const name of Object.values(TREE_MESHES)) {
+    if (!geos[name]) throw new Error(`GLB 缺少 ${name} 网格`);
+  }
+  return geos;
+}
