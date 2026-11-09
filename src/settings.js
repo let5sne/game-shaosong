@@ -9,13 +9,14 @@
  */
 import { DIFFICULTIES, SCENARIOS, findScenario } from './data.js';
 
-export const STORE_KEY = 'shaosong.settings';
+// 分支版独立命名空间：与《绍宋》本尊同源同端口部署时，存档与偏好互不踩踏
+export const STORE_KEY = 'chixie.settings';
 /** 设置面板重载后自动续档的一次性标记（sessionStorage，不跨会话） */
-export const RESUME_KEY = 'shaosong.resume';
+export const RESUME_KEY = 'chixie.resume';
 export const LEGACY_KEYS = {
-  difficulty: 'shaosong.difficulty',
-  scenario: 'shaosong.scenario',
-  mute: 'shaosong.muted',
+  difficulty: 'chixie.difficulty',
+  scenario: 'chixie.scenario',
+  mute: 'chixie.muted',
 };
 export const EFFECT_LABEL = { live: '即时', reload: '重载', next: '下局' };
 export const SOURCE_LABEL = { url: '链接指定', saved: '已保存', default: '默认' };
@@ -156,7 +157,7 @@ export const SETTING_GROUPS = [
         // 打开裸链接 ?seed=... 也会被悄悄塞进剧本关（历史实机回归会抓到）。
         // 面板／开场页选择后由 syncUrl 写入 ?scenario=，链接自身就是持久化。
         urlOnly: true,
-        desc: '北伐长局或短剧本（顺昌／郾城，固定开局）；链接参数可直接起该关。',
+        desc: '北伐长局或短剧本（清河／顺昌／郾城，固定开局）；链接参数可直接起该关。',
         options: [{ v: 'campaign', label: '北伐长局' }, ...SCENARIOS.map(s => ({ v: s.id, label: s.name }))],
         decode: p => (p.has('scenario') ? (findScenario(p.get('scenario'))?.id ?? 'campaign') : undefined),
         encode: v => ({ scenario: v === 'campaign' ? null : v }),

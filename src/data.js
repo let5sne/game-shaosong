@@ -1,7 +1,9 @@
 /**
- * 《绍宋 · 建炎北伐》静态数据
- * 灵感取自榴弹怕水《绍宋》的架空历史设定，地名与人物为历史公有素材，
- * 文案、事件与数值均为本游戏原创，非官方衍生作品。
+ * 《持械入宋 · 清河烽火》静态数据
+ * 改编自茶根儿小说《持械入宋》设定（现代五人小队携械穿越北宋末年），
+ * 地名、朝代名词为历史公有素材，人物形象与文案、事件、数值均为本游戏原创，
+ * 非官方衍生作品；正式对外发布须先取得原著改编授权。
+ * 引擎与长局结构承自《绍宋 · 建炎北伐》分支基线。
  *
  * 坐标约定：x 向东，z 向南（three.js 世界坐标 XZ 平面）
  */
@@ -139,6 +141,40 @@ export const HEROES = [
     desc: '自北南归，力主和议。用之可缓兵，然主战之气必挫。', atk: -0.10, morale: -6, zhanDelta: -18, heDelta: 18, goldBonus: 8,
     art: { short: '和议', name: '南自南、北自北', desc: '军备废弛，全军守势 -5%', defend: -0.05 },
   },
+
+  // ── 械客 · 现代五人小队（squad: true，只在「清河烽火」剧本登场）──────────
+  // 改编自小说《持械入宋》：现代火器碾压全无平衡可言，故「械」的强度被
+  // 拆进地形战法与事件卡，真正的约束是弹药、人手与乡野立足——克制地强。
+  {
+    id: 'linzhao', name: '林昭', title: '队长', faction: '械客', martial: 8, politics: 5, squad: true,
+    desc: '京片子，冷静果决。现代班组战术的定盘星：先算后动，令行禁止。',
+    atk: 0.22, morale: 8, zhanDelta: 6,
+    art: { short: '班组', name: '现代班组战术', desc: '山险攻势 +16%、平原攻势 +12%，守势 +4%', terrain: { mountain: 0.16, plain: 0.12 }, defend: 0.04 },
+  },
+  {
+    id: 'xiechangfeng', name: '谢长风', title: '狙击手', faction: '械客', martial: 9, politics: 3, squad: true,
+    desc: '沉默寡言，一枪定军心。千米之外，取敌酋首级如探囊。',
+    atk: 0.24, morale: 4, zhanDelta: 4,
+    art: { short: '冷枪', name: '千米冷枪', desc: '山险攻势 +14%、平原攻势 +10%，守势 +2%', terrain: { mountain: 0.14, plain: 0.10 }, defend: 0.02 },
+  },
+  {
+    id: 'mazhenbang', name: '马振邦', title: '军械师', faction: '械客', martial: 7, politics: 6, squad: true,
+    desc: '一口东北大碴子味，战力拉满。复刻底火与火药，营中军械不竭。',
+    atk: 0.12, morale: 3, zhanDelta: 3,
+    art: { short: '造械', name: '野战军械', desc: '各城兵额 +20%，粮赋 +4%', cap: 0.20, income: 0.04 },
+  },
+  {
+    id: 'wanghaochuan', name: '王浩川', title: '通信兵', faction: '械客', martial: 5, politics: 6, squad: true,
+    desc: '广东仔，情报组网，眼观六路。电台所及，孤军亦有耳目。',
+    atk: 0.10, morale: 4, zhanDelta: 4,
+    art: { short: '组网', name: '电台组网', desc: '孤军之弊减免 60%，守势 +6%', supply: 0.60, defend: 0.06 },
+  },
+  {
+    id: 'chensu', name: '陈素', title: '医官', faction: '械客', martial: 4, politics: 7, squad: true,
+    desc: '湘妹子，妙手回春。战地玫瑰，伤兵归队、军心自稳。',
+    atk: 0.08, morale: 8, zhanDelta: 2,
+    art: { short: '救护', name: '战地救护', desc: '全军守势 +12%', defend: 0.12 },
+  },
 ];
 
 /** 拜将情境指引：只作提示，不参与任何数值判定 */
@@ -151,6 +187,11 @@ export const HERO_USE = {
   ligang: '主和渐盛 · 分路补半道政令',
   zhaoding: '粮秣吃紧 · 分路补漕粮',
   qinhui: '主和路线 · 军备废弛',
+  linzhao: '械客统领 · 山险平原皆宜',
+  xiechangfeng: '攻坚拔锐 · 斩将夺旗',
+  mazhenbang: '兵额吃紧 · 广募乡勇',
+  wanghaochuan: '孤军深入 · 通联自持',
+  chensu: '守势吃紧 · 伤兵归列',
 };
 
 /** 事件卡：cond 决定可否出现，once 表示全局仅一次 */
@@ -344,6 +385,65 @@ export const EVENTS = [
       { label: '敛兵入城', desc: '粮秣 +22，士气 -4，主战 -6', apply: s => { s.grain += 22; s.morale -= 4; s.court.zhan -= 6; } },
     ],
   },
+
+  // ── 「清河烽火」剧本专属事件：五人组各展所长，cond 锁死局号 ──────────
+  {
+    id: 'qinghe_luojia', once: true, priority: 1, title: '坠落清河', tag: '清河',
+    cond: s => s.scenarioId === 'qinghe' && s.turn >= 2 && s.cities.changan.owner === 'song',
+    text: '时空隧道一闭，五人携械坠于西北清河地界。乡民围观不敢近，蕃骑斥候已闻风窥伺。林昭收枪入匣：「先立足，再图远。」',
+    options: [
+      { label: '亮械立威', desc: '清河 +2 营，士气 +6，民心 -2（乡人畏惧）', apply: s => { s.cities.changan.troops += 2; s.morale += 6; s.popularity -= 2; } },
+      { label: '藏械示好', desc: '民心 +6，粮秣 +10（村民输粟）', apply: s => { s.popularity += 6; s.grain += 10; } },
+    ],
+  },
+  {
+    id: 'qinghe_yaobu', title: '夜袭蕃寨', tag: '清河',
+    cond: s => s.scenarioId === 'qinghe' && s.turn >= 3 && s.cities.luoyang.owner === 'jin' && s.cities.changan.owner === 'song',
+    text: '谢长风伏于岭上三日，标定了蕃寨头目的帐子。诸人请战：与其坐待叩边，不如趁夜拔了这颗钉子。',
+    options: [
+      { label: '选锐夜出', desc: '士气 +6，洛阳蕃兵 -2 营，粮秣 -10', apply: s => {
+        s.morale += 6; s.grain -= 10;
+        if (s.cities.luoyang.owner === 'jin') s.cities.luoyang.troops = Math.max(1, s.cities.luoyang.troops - 2);
+      } },
+      { label: '坚壁清野', desc: '清河 +2 营，粮秣 +8', apply: s => { s.cities.changan.troops += 2; s.grain += 8; } },
+    ],
+  },
+  {
+    id: 'qinghe_fuke', once: true, title: '复刻底火', tag: '清河',
+    cond: s => s.scenarioId === 'qinghe' && s.turn >= 3 && s.cities.changan.owner === 'song',
+    text: '马振邦拆开一枚缴获的枪弹，眯眼比对底火：「照这个复刻，咱的枪就不再是烧火棍。就是要钱，要料。」',
+    options: [
+      { label: '拨钱赶制', desc: '缗钱 -25，本局攻势 +8%（械利）', apply: s => { s.gold -= 25; s.gearBonus += 0.08; } },
+      { label: '原料抵充', desc: '缗钱 -8，民心 +3（以商队土产换料）', apply: s => { s.gold -= 8; s.popularity += 3; } },
+    ],
+  },
+  {
+    id: 'qinghe_zuwang', once: true, priority: 2, title: '电台组网', tag: '清河',
+    cond: s => s.scenarioId === 'qinghe' && s.turn >= 4 && s.cities.changan.owner === 'song',
+    text: '王浩川在岭脊架起短波天线，把方圆百里的烽燧、乡勇、斥候串成一张「网」：「阿妈话斋，信息就系命。」',
+    options: [
+      { label: '全时通联', desc: '本回合政令 +1，民心 +2（诸寨听调）', apply: s => { s.decree += 1; s.popularity += 2; } },
+      { label: '静默守听', desc: '清河 +2 营（预警从容，乡勇入列）', apply: s => { s.cities.changan.troops += 2; } },
+    ],
+  },
+  {
+    id: 'qinghe_jiuzhi', title: '战地玫瑰', tag: '清河',
+    cond: s => s.scenarioId === 'qinghe' && s.turn >= 3 && s.cities.changan.owner === 'song',
+    text: '寨中伤兵哀号。陈素挽袖上前，止血、清创、缝合，手法让郎中们看直了眼：「还有哪位要排队？」',
+    options: [
+      { label: '随军救护', desc: '士气 +8，粮秣 -8', apply: s => { s.morale += 8; s.grain -= 8; } },
+      { label: '巡诊乡里', desc: '民心 +6，粮秣 -6', apply: s => { s.popularity += 6; s.grain -= 6; } },
+    ],
+  },
+  {
+    id: 'qinghe_danyao', once: true, priority: 1, title: '弹药告急', tag: '清河',
+    cond: s => s.scenarioId === 'qinghe' && s.turn >= 5 && s.gearBonus > 0 && s.cities.changan.owner === 'song',
+    text: '马振邦清点弹药箱，眉头拧成疙瘩：「底火见底了。省着打，还是拿这一箱梭哈一把？」',
+    options: [
+      { label: '匀弹支用', desc: '本局攻势 -4%，粮秣 +12（省下辎重）', apply: s => { s.gearBonus = Math.max(0, s.gearBonus - 0.04); s.grain += 12; } },
+      { label: '集中弹药打硬仗', desc: '士气 +6，民心 -3（征发民夫转运）', apply: s => { s.morale += 6; s.popularity -= 3; } },
+    ],
+  },
 ];
 
 export const TERRAIN_LABEL = { plain: '平原', mountain: '山险', river: '水网', coast: '滨海' };
@@ -376,7 +476,8 @@ export const DIFFICULTIES = [
 
 /**
  * 短剧本关：固定开局 + 特定目标 + 事件白名单，复用长局同一套规则、战法与舆图。
- * 以本图州郡约略拟史地（顺昌拟寿春、郾城拟蔡州一带），非精确考据。
+ * 以本图州郡约略拟史地（顺昌拟寿春、郾城拟蔡州一带），非精确考据；
+ * 「清河烽火」为改编新关：清河边寨拟长安、蕃部大寨拟洛阳，人物与情节原创。
  *
  * 目标只用城池 id 声明，判定与进度一律交给 rules.js 的通用解释器：
  *   hold    必须守住的州郡，任一易主即败
@@ -386,6 +487,36 @@ export const DIFFICULTIES = [
  * 故存档只需存剧本 id，序列化不含任何函数。
  */
 export const SCENARIOS = [
+  {
+    id: 'qinghe', name: '清河烽火', tag: '守 · 九回合', era: '北宋末年 · 秋',
+    brief: '改编自小说《持械入宋》开局：现代五人小队全员携械，坠入烽烟四起的西北边地。本关以「长安」拟清河边寨、东面「洛阳」拟蕃部大寨：不须席卷天下，只要守住清河九轮；若有余力反手破寨，便是大捷。',
+    tactic: '现代火器威力无双，然弹药与人手皆有限：整军与移防须算准哪一处先撑不住。蕃骑每回合必来叩边；若余力尚存，可自清河奇袭洛阳，反客为主求一场大捷。',
+    difficulty: 'normal', maxTurns: 9,
+    grain: 90, gold: 50, popularity: 64, morale: 62,
+    court: { zhan: 60, he: 40 },
+    heroId: 'linzhao', heroCity: 'changan',
+    jinFury: 1, jinMight: 0.05, jinAtkScale: 0.90,
+    // 西北边地：只留清河一线接敌，江南诸州照旧作后院，金军东路压力不至牵动本关
+    owners: { changan: 'song' },
+    troops: {
+      changan: 11, luoyang: 18, taiyuan: 14, kaifeng: 18, dengzhou: 8,
+      shouchun: 8, chuzhou: 8, xiangyang: 6, luzhou: 6, jiankang: 6,
+    },
+    jinEveryTurn: true,
+    eventChance: 0.55, eventMinTurn: 2,
+    events: ['qinghe_luojia', 'qinghe_yaobu', 'qinghe_fuke', 'qinghe_zuwang', 'qinghe_jiuzhi', 'qinghe_danyao', 'kuibing', 'caoyun', 'minxian'],
+    hold: ['changan'],
+    capture: [],
+    bonus: ['luoyang'],
+    marks: ['changan', 'luoyang'],
+    strategy: { targets: ['luoyang'], guard: ['changan'] },
+    winKind: 'hold',
+    winTitle: '清河大捷', winText: '反手袭破洛阳大寨，蕃部胆裂、遣使请盟。清河之名，自此传遍秦陇——林昭望着东面残阳：「这天下，咱们还得守下去。」',
+    holdTitle: '婴寨不堕', holdText: '九轮叩边，寨栅未倒。清河父老赖以安枕——此局不以拓地论功，以不失桑梓为胜。',
+    greatTitle: '夜袭破寨',
+    loseHoldTitle: '清河失守', loseHoldText: '寨栅一破，蕃骑长驱而入。清河父老的血不能白流——但这一局，输了。',
+    timeoutTitle: '', timeoutText: '',
+  },
   {
     id: 'shunchang', name: '顺昌婴城', tag: '守 · 九回合', era: '绍兴十年 · 夏',
     brief: '金人毁盟南下，刘锜以八字军赴东京留守，行至顺昌而敌骑已薄城下。城孤粮少，诸将请退舟南还；刘锜凿舟沉之，示无去意。\n此关以淮南「寿春」当顺昌：不须席卷中原，只要婴城拒骑、挫其锐锋，撑过金人九轮猛攻。',

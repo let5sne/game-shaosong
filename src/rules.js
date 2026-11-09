@@ -415,6 +415,8 @@ export class GameState {
   }
   get yearName() {
     const t = this.turn;
+    // 清河关以「轮」计事，不入建炎／绍兴年系：械客不知年号，只记守了几轮
+    if (this.scenarioId === 'qinghe') return `清河纪事 · 第 ${Math.min(t, 9)} 轮`;
     if (t <= 8) return `建炎${['三年', '三年', '三年', '三年', '四年', '四年', '四年', '四年'][t - 1]} · ${['春', '夏', '秋', '冬'][(t - 1) % 4]}`;
     const y = Math.ceil((t - 8) / 4);
     const cn = ['元', '二', '三', '四', '五', '六', '七', '八'][y - 1] || String(y);
@@ -583,7 +585,10 @@ export class GameState {
       this.court.zhan = clamp(this.court.zhan + (h.zhanDelta || 0), 0, 100);
       this.court.he = clamp(this.court.he + (h.heDelta || 0), 0, 100);
       this.morale = clamp(this.morale + (h.morale || 0) * 0.5, 0, 100);
-      this.say(`【拜将】以${h.name}为都督诸军事，领「${h.art?.name || '诸军'}」。朝野议论纷然：${h.desc}`, 'event');
+      const lead = h.squad
+        ? `【领队】以${h.name}总领全队，行「${h.art?.name || '诸军'}」。军中哗然：${h.desc}`
+        : `【拜将】以${h.name}为都督诸军事，领「${h.art?.name || '诸军'}」。朝野议论纷然：${h.desc}`;
+      this.say(lead, 'event');
     }
     this.changed(); return true;
   }
@@ -778,7 +783,8 @@ export class GameState {
       if (side === 'song') { this.morale -= 8; this.popularity -= 3; }
     }
 
-    const label = side === 'song' ? '【北伐】' : '【金军南下】';
+    const qinghe = this.scenarioId === 'qinghe';
+    const label = side === 'song' ? (qinghe ? '【清河】' : '【北伐】') : (qinghe ? '【蕃骑叩边】' : '【金军南下】');
     const stationTag = side === 'song' ? '都督亲督' : '都督坐镇';
     const geo = [P.cross ? `渡${P.cross}` : '', P.isolated ? (side === 'song' ? '孤军' : '孤城') : '', P.stationed ? stationTag : ''].filter(Boolean).join(' · ');
     this.say(`${label}${geo ? `〔${geo}〕` : ''}${from.name}出 ${send} 营（攻势 ${atk.toFixed(1)}）／${to.name}守军 ${defenderTroops} 营（守势 ${def.toFixed(1)}）：${detail}`, win ? (side === 'song' ? 'good' : 'bad') : (side === 'song' ? 'bad' : 'good'));

@@ -7,7 +7,7 @@ import { SCENE_IDS, SCENE_THEMES, DEFAULT_CAMERA_POSE, sceneTheme } from '../src
 const CITY_IDS = new Set(CITY_DEFS.map(c => c.id));
 const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 
-test('主题 id 与战局一一对应：长局 + 两个短剧本', () => {
+test('主题 id 与战局一一对应：长局 + 三个短剧本', () => {
   assert.deepEqual([...SCENE_IDS], ['campaign', ...SCENARIOS.map(s => s.id)]);
   assert.equal(Object.keys(SCENE_THEMES).length, SCENE_IDS.length);
   for (const id of SCENE_IDS) assert.equal(SCENE_THEMES[id].id, id);

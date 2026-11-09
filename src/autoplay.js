@@ -92,6 +92,16 @@ export function battleOdds(s, from, to) {
 
 /**
  * 择将而任：统计当前可攻目标的地形与涉水情形，逐员估算战法收益。
+/**
+ * 械客（squad: true）只在「清河烽火」剧本登场；其余局只见原八员。
+ * 这样长局与旧短剧本的拜将候选集与分支基线完全一致，不因新增五人组而漂移。
+ */
+export function heroPool(s) {
+  const qinghe = s.scenarioId === 'qinghe';
+  return HEROES.filter(h => !!h.squad === qinghe);
+}
+
+/**
  * 平原多用岳飞、水网多用韩世忠、山险多用吴玠——不再是固定一将到底。
  */
 export function bestHero(s, phase = phaseOf(s)) {
@@ -107,7 +117,7 @@ export function bestHero(s, phase = phaseOf(s)) {
   if (!targets.length) return BEST_HERO;
   const totalW = targets.reduce((n, t) => n + t.weight, 0) || 1;
   let best = BEST_HERO, top = -Infinity;
-  for (const h of HEROES) {
+  for (const h of heroPool(s)) {
     const gain = targets.reduce((n, { from, to, weight }) => n + weight * (
       (h.art?.terrain?.[to.terrain] || 0)
       + (riverBetween(from, to)
@@ -158,7 +168,7 @@ export function bestViceHero(s, mainId = s.heroId, phase = phaseOf(s)) {
   const wet = targets.filter(({ from, to }) => riverBetween(from, to)).length / Math.max(1, targets.length);
 
   let best = null, top = -Infinity;
-  for (const h of HEROES) {
+  for (const h of heroPool(s)) {
     if (h.id === mainId) continue;
     const a = h.art || {};
     const gain = targets.reduce((n, { from, to, weight }) => n + weight * (
@@ -265,7 +275,7 @@ function economyAction(s, ctx) {
   const city = rear[0];
   if (!city) return null;
   if (ctx.dispatches < 1 && ec.dispatchTurn < DISPATCH_PER_TURN) {
-    const hid = HEROES.map(h => h.id).sort((a, b) => heroRecord(ec, a).exp - heroRecord(ec, b).exp)[0];
+    const hid = heroPool(s).map(h => h.id).sort((a, b) => heroRecord(ec, a).exp - heroRecord(ec, b).exp)[0];
     const h = HEROES.find(x => x.id === hid);
     const task = s.grain < 95 ? 'tunken' : 'duzao';
     return {

@@ -451,7 +451,7 @@ test('剧本存档往返：scenarioId 保留，续玩与不中断的一局完全
 });
 
 test('剧本目标声明自洽：marks 覆盖必守与必取，军令文案与进度同步', () => {
-  assert.equal(SCENARIOS.length, 2);
+  assert.equal(SCENARIOS.length, 3);
   for (const sc of SCENARIOS) {
     const s = new GameState({ seed: 10, scenario: sc.id });
     const p = scenarioProgress(s, sc);

@@ -9,7 +9,7 @@
  * light 缺省字段表示「沿用当前档默认值」。campaign 的 light 恒为 null：
  * 长局开场页保持用户偏好的清透宣纸底色，一点不加料；季节光色只属于短剧本。
  */
-export const SCENE_IDS = Object.freeze(['campaign', 'shunchang', 'yancheng']);
+export const SCENE_IDS = Object.freeze(['campaign', 'qinghe', 'shunchang', 'yancheng']);
 
 /** 机位与 terrain 无关；数值均落在 OrbitControls 的 minDistance=34 / maxDistance=185 内。 */
 export const DEFAULT_CAMERA_POSE = Object.freeze({
@@ -25,6 +25,22 @@ export const SCENE_THEMES = Object.freeze({
     pose: DEFAULT_CAMERA_POSE,
     marks: [],
     light: null,
+  },
+  qinghe: {
+    id: 'qinghe', name: '清河烽火', tag: '守 · 九回合',
+    era: '北宋末年 · 秋', season: '秋', accent: '#8a6d3b',
+    poem: '携械坠世，婴寨自守',
+    brief: '现代五人小队全员携械，坠入烽烟四起的西北边地。守住清河边寨九轮；若有余力反手破寨，便是大捷。',
+    // 西北角镜头：清河（长安）与蕃寨（洛阳）同框
+    pose: Object.freeze({ position: [-2, 44, 22], target: [-28, 0, -15], fov: 44 }),
+    marks: Object.freeze(['changan', 'luoyang']),
+    // 秦陇秋深：风沙微黄、天光干暖，衬出边地烽燧的苍莽
+    light: Object.freeze({
+      sky: 0xe6dbc6, fogScale: 1.02,
+      sunColor: 0xffd8a8, sunMul: 1.06, sunPos: [-48, 40, 30],
+      hemi: [0xf2e7cd, 0x6f604a], ambientMul: 0.96,
+      exposure: 1.28,
+    }),
   },
   shunchang: {
     id: 'shunchang', name: '顺昌婴城', tag: '守 · 九回合',

@@ -148,6 +148,7 @@ if (check) {
     hard:   { lo: 0.05, hi: 0.45, minTurn: 18 },
   };
   const SCENARIO_EXPECT = {
+    qinghe:   { lo: 0.60, hi: 0.97, minTurn: 4 },
     shunchang: { lo: 0.55, hi: 0.95, minTurn: 4 },
     yancheng:  { lo: 0.30, hi: 0.75, minTurn: 5 },
   };

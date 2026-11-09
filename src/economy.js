@@ -94,6 +94,27 @@ export const HERO_MILESTONES = Object.freeze({
     { at: 3, name: '南自南、北自北', desc: '省兵息民，府库 +4 钱/回合', goldBonus: 4 },
     { at: 5, name: '绍兴和议', desc: '府库 +6 钱/回合，然军备废弛、守势 -2%', goldBonus: 6, defend: -0.02 },
   ],
+  // 械客（清河烽火）：现代人的成长是「更会用这几杆枪」，而非学会掌千军
+  linzhao: [
+    { at: 3, name: '现代军令', desc: '令行禁止，全军攻势 +3%', atk: 0.03 },
+    { at: 5, name: '火力压制', desc: '班组协同压制，攻势 +5%、守势 +2%', atk: 0.05, defend: 0.02 },
+  ],
+  xiechangfeng: [
+    { at: 3, name: '观测诸元', desc: '测距修风，一击必中，攻势 +3%', atk: 0.03 },
+    { at: 5, name: '斩首先声', desc: '敌酋授首、三军夺气，攻势 +4%、守势 +2%', atk: 0.04, defend: 0.02 },
+  ],
+  mazhenbang: [
+    { at: 3, name: '复刻底火', desc: '弹药渐丰，粮赋 +5%', income: 0.05 },
+    { at: 5, name: '流水造械', desc: '兵额 +12%、粮赋 +5%', cap: 0.12, income: 0.05 },
+  ],
+  wanghaochuan: [
+    { at: 3, name: '通联诸寨', desc: '情报通联，守势 +4%', defend: 0.04 },
+    { at: 5, name: '全图耳目', desc: '守势 +6%、攻势 +1%', defend: 0.06, atk: 0.01 },
+  ],
+  chensu: [
+    { at: 3, name: '战地医院', desc: '伤兵归队，守势 +5%', defend: 0.05 },
+    { at: 5, name: '妙手仁心', desc: '军心自稳，守势 +7%、粮赋 +2%', defend: 0.07, income: 0.02 },
+  ],
 });
 
 /** 模式是否生效：数据与开关分离，关掉时进度冻结而不丢失 */

@@ -8,9 +8,10 @@
 import { EVENTS, findScenario } from './data.js';
 import { normalizeEconomy } from './economy.js';
 
-export const SAVE_KEY = 'shaosong.save.v1';        // 旧单槽；首次访问三槽时迁入槽 1
-export const SLOT_KEY = 'shaosong.save.v1.slot';   // shaosong.save.v1.slot1..3
-export const ACTIVE_KEY = 'shaosong.save.active'; // 当前自动存档写哪个槽
+// 分支版独立命名空间：与《绍宋》本尊同源同端口部署时，存档与偏好互不踩踏
+export const SAVE_KEY = 'chixie.save.v1';        // 旧单槽；首次访问三槽时迁入槽 1
+export const SLOT_KEY = 'chixie.save.v1.slot';   // chixie.save.v1.slot1..3
+export const ACTIVE_KEY = 'chixie.save.active';  // 当前自动存档写哪个槽
 export const SAVE_SLOTS = 3;
 const VERSION = 1;
 
