@@ -78,3 +78,13 @@ export const SCENE_THEMES = Object.freeze({
 export function sceneTheme(id) {
   return SCENE_THEMES[id] || SCENE_THEMES.campaign;
 }
+
+/**
+ * 局内默认机位：world 首镜与「复位视角」（R 键／重开本局）都取这里的值。
+ * 战场只占全图一隅的剧本（清河：长安↔洛阳一线）给西北近景，村寨与蕃帐看得清；
+ * 未列出的剧本沿用全图机位，长局与顺昌／郾城行为不变。纯展示数据，不影响判定。
+ */
+export const HOME_POSE = Object.freeze({
+  default: Object.freeze({ position: Object.freeze([6, 84, 96]), target: Object.freeze([0, 0, -3]), fov: 46 }),
+  qinghe:  Object.freeze({ position: Object.freeze([-4, 44, 22]), target: Object.freeze([-28, 0, -15]), fov: 46 }),
+});

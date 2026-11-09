@@ -10,6 +10,7 @@ import {
   pineGeometry, broadGeometry, rockGeometry, tentGeometry, mountainClusterGeometry, boulderGeometry,
   loadUnitLibrary, loadCapitalLibrary, loadTreeLibrary, TREE_MESHES, applyVerticalAO,
 } from './models.js';
+import { HOME_POSE } from './themes.js';
 import { createInkPass, makeContactInk, makeInkTexture } from './ink.js';
 
 const W = 116, D = 100, CX = -2, CZ = -3;
@@ -491,8 +492,15 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
   scene.background = new THREE.Color(SKY);
   scene.fog = new THREE.Fog(SKY, terrainStyle === 'real' ? 105 : 118, terrainStyle === 'real' ? 268 : 255);
 
+  // 局内默认机位按剧本取：清河的战场只在西北一角，首镜便给近景；
+  // 读取放在调用时（而非建 world 时），开场页同会话换剧本再进局也能取对。
+  const homePose = () => HOME_POSE[state.scenarioId] || HOME_POSE.default;
   const camera = new THREE.PerspectiveCamera(46, container.clientWidth / container.clientHeight, 0.1, 600);
-  camera.position.set(6, 84, 96);
+  {
+    const h = homePose();
+    camera.position.fromArray(h.position);
+    camera.fov = h.fov;
+  }
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, dprCap));
@@ -508,7 +516,7 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
   const inkPass = createInkPass(renderer, { enabled: ink });
 
   const controls = new OrbitControls(camera, renderer.domElement);
-  controls.target.set(0, 0, -3);
+  controls.target.fromArray(homePose().target);
   controls.enableDamping = true;
   controls.dampingFactor = 0.075;
   controls.minDistance = 34;
@@ -1474,9 +1482,10 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
   }
   function resetCamera() {
     camTween = null;
-    camera.position.set(6, 84, 96);
-    controls.target.set(0, 0, -3);
-    camera.fov = 46;
+    const h = homePose();
+    camera.position.fromArray(h.position);
+    controls.target.fromArray(h.target);
+    camera.fov = h.fov;
     camera.updateProjectionMatrix();
     controls.update();
   }
