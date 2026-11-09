@@ -10,10 +10,13 @@
  *   2) 用兵节律：每回合至多两度进军、两处整军；
  *   3) 攻城留余量：期望攻守比不足阈值便先蓄势，不赌运气。
  */
-import { HEROES, riverBetween } from './data.js';
+import { HEROES, CITY_DEFS, riverBetween } from './data.js';
 import {
   battleParams, marchCost, marchDecree, troopCap, supplyMap, GEO, VICE_COST_GOLD,
 } from './rules.js';
+import {
+  buildingLevels, buildCost, heroRecord, MAX_BUILDING_LEVEL, DISPATCH_PER_TURN,
+} from './economy.js';
 
 export const BEST_HERO = 'yuefei';
 
@@ -33,12 +36,29 @@ const CENTRAL = ['xuzhou', 'yingtian', 'caizhou', 'haizhou', 'jinan', 'dengzhou'
 
 /** 三段战略：先固淮北外围，再复东京，最后经大名／真定取燕京 */
 export function phaseOf(s) {
+  if (s.scenario) return s.scenario.name;      // 短剧本有自己的军令，不套三阶段
   const kf = s.cities.kaifeng.owner === 'song';
   const yj = s.cities.yanjing.owner === 'song';
   if (kf && yj) return '中兴有成';
   if (kf) return '取燕云';
   const central = CENTRAL.filter(id => s.cities[id].owner === 'song').length;
   return (central >= 4 && s.turn >= 7) ? '复旧都' : '固淮北';
+}
+
+/**
+ * 阶段偏向：短剧本只认 strategy.targets，其余州郡一律不取，
+ * 免得托管在九回合的守城关里仍按「复旧都→取燕云」满图乱攻。
+ */
+function biasFor(s, phase) {
+  const sc = s.scenario;
+  if (!sc) return PHASE_BIAS[phase] || {};
+  const bias = Object.fromEntries(CITY_DEFS.map(d => [d.id, 0]));
+  (sc.strategy?.targets || []).forEach((id, i) => { bias[id] = 1.5 - i * 0.18; });
+  // 必守之州一旦易主，权重压过所有进取目标：先夺回，再论破阵
+  for (const id of sc.strategy?.guard || []) {
+    if (s.cities[id]?.owner !== 'song') bias[id] = 1.9;
+  }
+  return bias;
 }
 
 /** 各阶段对目标的偏向；0 表示此阶段不取该城 */
@@ -75,7 +95,7 @@ export function battleOdds(s, from, to) {
  * 平原多用岳飞、水网多用韩世忠、山险多用吴玠——不再是固定一将到底。
  */
 export function bestHero(s, phase = phaseOf(s)) {
-  const bias = PHASE_BIAS[phase] || {};
+  const bias = biasFor(s, phase);
   const targets = [];
   for (const from of s.songCities) {
     for (const id of from.links) {
@@ -117,7 +137,7 @@ export function bestStation(s, opts = []) {
  */
 export function bestViceHero(s, mainId = s.heroId, phase = phaseOf(s)) {
   if (!mainId) return null;
-  const bias = PHASE_BIAS[phase] || {};
+  const bias = biasFor(s, phase);
   const sup = supplyMap(s);
   const targets = [];
   for (const from of s.songCities) {
@@ -176,7 +196,7 @@ export function bestViceStation(s) {
 }
 
 function attackOptions(s, phase) {
-  const bias = PHASE_BIAS[phase] || {};
+  const bias = biasFor(s, phase);
   const out = [];
   for (const from of s.songCities) {
     if (from.troops <= 2) continue;
@@ -202,8 +222,8 @@ const canTrain = (s, c, ctx) => c && c.owner === 'song' && ctx.trains < TRAIN_LI
   && s.decree >= 1 && s.grain >= 18 && s.gold >= 12
   && c.lastTrainTurn !== s.turn && c.troops < troopCap(s, c);
 
-/** 春、夏金骑北还，是北伐窗口；秋、冬则须厚集边防 */
-const isWindowSeason = s => (s.turn - 1) % 4 < 2;
+/** 春、夏金骑北还，是北伐窗口；秋、冬则须厚集边防。短剧本金人每回合叩城，无窗口可言 */
+const isWindowSeason = s => !s.scenario?.jinEveryTurn && (s.turn - 1) % 4 < 2;
 
 function weakestFront(s) {
   const front = s.frontCities;
@@ -227,9 +247,46 @@ function reinforceOption(s, targetId) {
   return gain >= 2 ? { from: best.id, to: targetId, gain } : null;
 }
 
-/** 每回合新建一次：{ turn, marches, trains } */
+/** 每回合新建一次：{ turn, marches, trains, builds, dispatches } */
 export function newTurnContext(s) {
-  return { turn: s.turn, marches: 0, trains: 0, phase: phaseOf(s) };
+  return { turn: s.turn, marches: 0, trains: 0, builds: 0, dispatches: 0, phase: phaseOf(s) };
+}
+
+/**
+ * 治略模式的余力决策：只在开启时进入，且排在「积谷／整军」之前但要求余 2 道政令，
+ * 免得托管把北伐的政令全花在种田上。后方城（不与金接壤）才营建，避免投入当场被打掉。
+ * 关闭时此函数根本不会被调用，托管决策序列与基线逐字节一致。
+ */
+function economyAction(s, ctx) {
+  const ec = s.economy;
+  const rear = s.songCities
+    .filter(c => !c.links.some(id => s.cities[id].owner === 'jin'))
+    .sort((a, b) => b.yieldGrain - a.yieldGrain);
+  const city = rear[0];
+  if (!city) return null;
+  if (ctx.dispatches < 1 && ec.dispatchTurn < DISPATCH_PER_TURN) {
+    const hid = HEROES.map(h => h.id).sort((a, b) => heroRecord(ec, a).exp - heroRecord(ec, b).exp)[0];
+    const h = HEROES.find(x => x.id === hid);
+    const task = s.grain < 95 ? 'tunken' : 'duzao';
+    return {
+      type: 'chaiqian', hero: hid, city: city.id, task,
+      desc: `遣${h.name}赴${city.name}${task === 'tunken' ? '督屯积谷' : '督造军械'}，兼积阅历`,
+    };
+  }
+  if (ctx.builds >= 2) return null;
+  const levels = buildingLevels(ec, city.id);
+  const order = s.grain < 95
+    ? ['tuntian', 'zuofang', 'canglin', 'shibo']
+    : ['zuofang', 'tuntian', 'canglin', 'shibo'];
+  for (const bid of order) {
+    const lv = levels[bid];
+    if (lv >= MAX_BUILDING_LEVEL) continue;
+    const cost = buildCost(lv);
+    if (s.gold < cost.gold || s.grain < cost.grain) continue;
+    const b = { tuntian: '屯田', canglin: '仓廪', zuofang: '军器作坊', shibo: '市舶' }[bid];
+    return { type: 'yingjian', city: city.id, building: bid, desc: `${city.name}营建${b}至 ${lv + 1} 级，以固根本` };
+  }
+  return null;
 }
 
 /**
@@ -243,16 +300,18 @@ export function chooseAction(s, ctx = newTurnContext(s)) {
   // 一、择将而任：渡淮阶段重水师，转入中原平原则改任步阵；
   //    阶段转折时准许换将一次，但距上次拜将须隔六回合，免得朝令夕改。
   const phase = ctx.phase;
-  const wantHero = bestHero(s, phase);
+  const sc = s.scenario;
+  const wantHero = sc ? sc.heroId : bestHero(s, phase);
   const opening = s.turn <= 3;
   const turnPoint = phase !== '固淮北' && s.turn - (s.heroTurn || 0) >= 6;
-  if (s.heroId !== wantHero && (opening || turnPoint) && s.decree >= (opening ? 2 : 4)) {
+  // 短剧本开局既定主帅与驻节，不再择将、不另置幕府：政令要尽数用于守城或破阵
+  if (!sc && s.heroId !== wantHero && (opening || turnPoint) && s.decree >= (opening ? 2 : 4)) {
     const h = HEROES.find(x => x.id === wantHero);
     const why = opening ? '以应淮上水势' : '中原平原，宜改步阵';
     return { type: 'hero', id: wantHero, desc: `拜${h.name}为都督，领「${h.art?.name}」——${why}` };
   }
   // 一之二、分路都督：战线拉长后置一帅分镇，择与主帅互补之将
-  if (!s.viceHeroId && s.hero && s.turn >= 6 && s.decree >= 3
+  if (!sc && !s.viceHeroId && s.hero && s.turn >= 6 && s.decree >= 3
       && s.gold >= VICE_COST_GOLD && s.frontCities.length >= 2) {
     const vid = bestViceHero(s, s.heroId, phase);
     if (vid) {
@@ -331,6 +390,13 @@ export function chooseAction(s, ctx = newTurnContext(s)) {
     }
   }
 
+  // 八之二、治略余力：短剧本是固定题解，不种田；长局且余 2 道政令才动工。
+  // 关闭时整段短路，前面的决策与基线完全一致。
+  if (!sc && s.economyOn && s.economy && s.decree >= 2) {
+    const eco = economyAction(s, ctx);
+    if (eco) return eco;
+  }
+
   // 九、余政令尽作积贮：粮、民心、兵额，按紧缺程度取一
   if (s.decree >= 1) {
     if (s.grain < 150) return { type: 'chouliang', desc: `积谷以备北伐` };
@@ -368,6 +434,10 @@ export function chooseEvent(s) {
     guanshan: () => s.grain >= 55 ? 0 : 1,
     haishang: () => s.gold < 55 ? 0 : 1,
     zhongxing: () => 0,
+    // 短剧本：守关优先挫敌锐气，攻关优先步阵迎击；粮秣见底才收敛
+    shunchang_zaozhou: () => 0,
+    shunchang_yezhuo: () => (s.grain < 45 || s.cities.shouchun.troops < 7) ? 1 : 0,
+    yancheng_guazima: () => (s.grain < 40 ? 1 : 0),
   };
   const i = table[ev.id] ? table[ev.id]() : 0;
   return Math.min(i, ev.options.length - 1);
@@ -387,12 +457,16 @@ export function applyAction(s, a, ctx) {
     case 'heyi': ok = s.heyi(); break;
     case 'zhengjun': ok = s.zhengjun(a.city); break;
     case 'jinjun': ok = s.jinjun(a.from, a.to); break;
+    case 'yingjian': ok = s.yingjian(a.city, a.building); break;
+    case 'chaiqian': ok = s.chaiqian(a.hero, a.city, a.task); break;
     default: return false;
   }
   if (ok) {
     if (ctx) {
       if (a.attack || a.type === 'jinjun') ctx.marches++;
       if (a.type === 'zhengjun') ctx.trains++;
+      if (a.type === 'yingjian') ctx.builds++;
+      if (a.type === 'chaiqian') ctx.dispatches++;
     }
     s.emit('auto', { action: a, desc: a.desc || '' });
   }

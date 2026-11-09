@@ -1,7 +1,13 @@
 import {
   CITY_DEFS, HEROES, EVENTS, TERRAIN_DEFENSE, TERRAIN_LABEL, DIFFICULTIES,
-  riverBetween,
+  SCENARIOS, findScenario, riverBetween,
 } from './data.js';
+import {
+  economyActive, createEconomy, buildingLevels, buildCost, BUILDINGS,
+  DISPATCH_TASKS, DISPATCH_PER_TURN, MAX_BUILDING_LEVEL, ARMS_CAP, TRAIN_ARMS_COST,
+  heroProgress, officeBonus, economyCombatBonus, economyCapBonus,
+  economyIncome, economyYield, consumeGranary, razeBuildings,
+} from './economy.js';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
@@ -34,6 +40,80 @@ export const MAX_CHARGE = 4;
 /** 分路都督：主帅之外至多再置一帅，诸将不相统属，须有代价 */
 export const VICE_COST_GOLD = 20;
 export const VICE_COURT_HE = 2;
+
+/**
+ * 剧本目标的通用解释器：数据层只声明城池 id，这里负责进度、文案与胜负。
+ * 纯函数、不碰 DOM，Node 里可直接测；两关共用一套判定，不会各写一套账。
+ */
+export function scenarioProgress(s, sc) {
+  const nameOf = id => s.cities[id]?.name || id;
+  const holds = sc.hold || [];
+  const want = sc.capture || [];
+  const extra = sc.bonus || [];
+  const lost = holds.filter(id => s.cities[id]?.owner !== 'song');
+  const need = want.filter(id => s.cities[id]?.owner !== 'song');
+  const bonusLeft = extra.filter(id => s.cities[id]?.owner !== 'song');
+  const items = [
+    ...holds.map(id => ({ label: `守${nameOf(id)}`, done: s.cities[id]?.owner === 'song' })),
+    ...want.map(id => ({ label: `克${nameOf(id)}`, done: s.cities[id]?.owner === 'song' })),
+    ...extra.map(id => ({ label: `取${nameOf(id)}`, done: s.cities[id]?.owner === 'song', optional: true })),
+  ];
+  return {
+    items, lost, need, bonusLeft,
+    holdDone: lost.length === 0,
+    captureDone: want.length > 0 && need.length === 0,
+    bonusDone: extra.length > 0 && bonusLeft.length === 0,
+    text: lost.length ? `已失 ${lost.map(nameOf).join('、')}`
+      : need.length ? `待克 ${need.map(nameOf).join('、')}`
+        : sc.winKind === 'hold'
+          ? `守土 ${holds.length}/${holds.length} · 第 ${Math.min(s.turn, sc.maxTurns)}/${sc.maxTurns} 回合`
+          : bonusLeft.length ? `本务已竟 · 可进取 ${bonusLeft.map(nameOf).join('、')}`
+            : '军令已竟',
+  };
+}
+
+/** 剧本关的胜负：先通用硬性败因，再守土／克复／回合上限 */
+export function scenarioResult(s, sc) {
+  if (s.cities.linan.owner === 'jin' || s.cities.jiankang.owner === 'jin') {
+    return { kind: 'lose', title: '江左失守', text: '行在陷落，朝廷再无立足之地。' };
+  }
+  if (s.popularity <= 0) {
+    return { kind: 'lose', title: '民心尽失', text: '赋重役繁，民不聊生。守城之师，未待敌至而先散。' };
+  }
+  if (s.famine >= 3) {
+    return { kind: 'lose', title: '仓廪告罄', text: '连岁乏粮，诸军自溃。' };
+  }
+  const p = scenarioProgress(s, sc);
+  if (p.captureDone && p.holdDone) {
+    const great = p.bonusDone && sc.greatTitle;
+    return {
+      kind: 'win',
+      title: great ? sc.greatTitle : sc.winTitle,
+      text: great ? (sc.greatText || sc.winText) : sc.winText,
+    };
+  }
+  // 守势关另有「反客为主」：袭取 bonus 城即刻大捷，不必苦撑到回合上限
+  if (sc.winKind === 'hold' && p.bonusDone && p.holdDone) {
+    return { kind: 'win', title: sc.winTitle, text: sc.winText };
+  }
+  // 必守之州中途易主不立刻判负：尚有余裕反攻夺回，终局时仍在敌手才算败
+  if (s.turn > s.maxTurns) {
+    if (!p.holdDone) return { kind: 'lose', title: sc.loseHoldTitle, text: sc.loseHoldText };
+    return sc.winKind === 'hold'
+      ? { kind: 'win', title: sc.holdTitle, text: sc.holdText }
+      : { kind: 'lose', title: sc.timeoutTitle, text: sc.timeoutText };
+  }
+  return null;
+}
+
+/** 开场军令一行：把声明式目标转成玩家读得懂的短句 */
+export function scenarioGoalText(sc) {
+  const nameOf = id => CITY_DEFS.find(d => d.id === id)?.name || id;
+  const hold = (sc.hold || []).map(nameOf).join('、');
+  const take = (sc.capture || []).map(nameOf).join('、');
+  const extra = (sc.bonus || []).map(nameOf).join('、');
+  return `守 ${hold}${take ? `，克 ${take}` : ''}${extra ? `；能取 ${extra} 则为大捷` : ''}，${sc.maxTurns} 回合为限`;
+}
 
 /**
  * 一路都督只在一州持节。主帅（heroId）总戎事、其战法为全军常效；
@@ -111,7 +191,8 @@ export function supplyMap(state) {
 /** 城池兵额：受岁赋、本城节制将领的战法与粮道共同约束 */
 export function troopCap(state, c) {
   const base = Math.max(12, Math.round(c.yieldGrain * 2.8));
-  const withArt = Math.round(base * (1 + artValue(state, c.id, 'cap')));
+  // 治略：里程碑「行营广募」等只在开启时贡献兵额，关闭时 +0 不改变取整结果
+  const withArt = Math.round(base * (1 + artValue(state, c.id, 'cap') + economyCapBonus(state)));
   const isolated = c.owner === 'song' && !supplyMap(state).linked.has(c.id)
     && !artValue(state, c.id, 'supply');
   return isolated ? Math.max(8, Math.round(withArt * 0.6)) : withArt;
@@ -219,11 +300,17 @@ export class GameState {
   reset(opts = {}) {
     const id = opts.difficulty ?? this.difficulty ?? 'normal';
     const D = DIFFICULTIES.find(d => d.id === id) || DIFFICULTIES[1];
-    this.difficulty = D.id;
-    this.maxTurns = D.maxTurns;
-    this.jinMight = D.jinMight;
+    // 未带 scenario 参数的 reset 视为「重开当前这一关」，故沿用旧 scenarioId。
+    // 要从开场页回到长局，须显式传 scenario: null。
+    const sc = opts.scenario !== undefined ? findScenario(opts.scenario) : findScenario(this.scenarioId);
+    this.scenarioId = sc?.id ?? null;
+    const D0 = sc ? (DIFFICULTIES.find(d => d.id === sc.difficulty) || D) : D;
+    this.difficulty = D0.id;
+    this.maxTurns = sc?.maxTurns ?? D.maxTurns;
+    this.jinMight = sc ? (sc.jinMight ?? D0.jinMight) : D.jinMight;
     this.seed = Number.isFinite(opts.seed) ? opts.seed : (Math.floor(Math.random() * 900000) + 100000);
-    this.random = opts.random !== false;
+    // 剧本是固定开局的题解，不抽两条随机变局；但战斗／事件仍走同一条可复现随机流
+    this.random = opts.random !== false && !sc;
     // 战斗流与开局变局流分离，但都由局号派生，故整局可复现
     this.rngState = (this.seed ^ 0x5f3759df) >>> 0;
 
@@ -231,6 +318,16 @@ export class GameState {
     CITY_DEFS.forEach(d => {
       this.cities[d.id] = { ...d, links: [...d.links], troops0: d.troops, owner: d.owner, lastTrainTurn: 0 };
     });
+    if (sc) {
+      for (const [cid, owner] of Object.entries(sc.owners || {})) {
+        if (this.cities[cid]) this.cities[cid].owner = owner;
+      }
+      for (const [cid, n] of Object.entries(sc.troops || {})) {
+        if (!this.cities[cid]) continue;
+        this.cities[cid].troops = n;
+        this.cities[cid].troops0 = n;   // 自然征募的上限也以固定开局为准
+      }
+    }
     // 补全双向邻接
     Object.values(this.cities).forEach(c => {
       c.links.forEach(id2 => {
@@ -238,24 +335,31 @@ export class GameState {
         if (other && !other.links.includes(c.id)) other.links.push(c.id);
       });
     });
-    // 难度先落到金军兵额上，之后变局再叠一层
-    if (D.jinTroops) this.jinCities.forEach(c => { c.troops = Math.max(2, c.troops + D.jinTroops); });
+    // 难度先落到金军兵额上，之后变局再叠一层；剧本兵力完全由定义给定
+    if (!sc && D.jinTroops) this.jinCities.forEach(c => { c.troops = Math.max(2, c.troops + D.jinTroops); });
 
     this.turn = 1;
-    this.grain = D.grain;
-    this.gold = D.gold;
-    this.popularity = 62;
-    this.morale = 58;
-    this.court = { zhan: clamp(58 + D.zhanDelta, 0, 100), he: clamp(42 - D.zhanDelta, 0, 100) };
-    this.heroId = null;
-    this.heroCity = null;      // 主帅驻节州郡
+    this.grain = sc?.grain ?? D.grain;
+    this.gold = sc?.gold ?? D.gold;
+    this.popularity = sc?.popularity ?? 62;
+    this.morale = sc?.morale ?? 58;
+    this.court = sc?.court ? { ...sc.court }
+      : { zhan: clamp(58 + D.zhanDelta, 0, 100), he: clamp(42 - D.zhanDelta, 0, 100) };
+    this.heroId = sc?.heroId ?? null;
+    this.heroCity = sc?.heroCity ?? null;      // 主帅驻节州郡
+    if (this.heroCity && this.cities[this.heroCity]?.owner !== 'song') this.heroCity = null;
     this.heroTurn = 0;         // 上次拜主帅所在回合，供「阶段转折换将」节流
     this.viceHeroId = null;    // 分路都督：与主帅分镇，战法只及本城
     this.viceHeroCity = null;
     this.viceHeroTurn = 0;
     this.flags = new Set();    // 事件链的记忆：某选项留下的朝局后果
     this.gearBonus = 0;
-    this.jinFury = D.jinFury;
+    // 治略（经营养成）：默认关闭。未显式传参时沿用当前模式，故重开一局不会偷偷退出。
+    // 关闭时 economy 为 null，所有规则分支短路，批量模拟的 seed=1..N 基线逐字节不变。
+    const ecoOn = opts.economy !== undefined ? !!opts.economy : !!this.economyOn;
+    this.economyOn = ecoOn;
+    this.economy = ecoOn ? createEconomy() : null;
+    this.jinFury = sc?.jinFury ?? D.jinFury;
     this._supplyKey = null;
     this._supply = null;
     this.charge = 0;
@@ -273,14 +377,22 @@ export class GameState {
     this.variant = { seed: this.seed, notes: [] };
     if (this.random) this.variant.notes = rollVariant(this, makeRng(this.seed), D.luck);
 
-    this.say('建炎之末，行在草创。官家立于江左，北望中原。', 'event');
-    const extra = this.variant.notes.length ? `｜${this.variant.notes.join('，')}` : '';
-    this.say(`【开局】${D.name} · 局号 #${this.seed}${extra}`, 'event');
-    this.say('目标：收复东京开封与燕京，重振版籍。', 'info');
+    if (sc) {
+      this.say(`【短剧本 · ${sc.name}】${sc.era}。${sc.brief.split('\n')[0]}`, 'event');
+      this.say(`【军令】${scenarioGoalText(sc)}。`, 'info');
+      this.say(`【开局】固定局面 · 局号 #${this.seed}；不抽变局，掷点仍随局号可复现。`, 'event');
+    } else {
+      this.say('建炎之末，行在草创。官家立于江左，北望中原。', 'event');
+      const extra = this.variant.notes.length ? `｜${this.variant.notes.join('，')}` : '';
+      this.say(`【开局】${D.name} · 局号 #${this.seed}${extra}`, 'event');
+      this.say('目标：收复东京开封与燕京，重振版籍。', 'info');
+    }
   }
 
   // ── 查询 ──────────────────────────────────────────────────
   get diffDef() { return DIFFICULTIES.find(d => d.id === this.difficulty) || DIFFICULTIES[1]; }
+  /** 当前短剧本；长局为 null。存档只存 id，回查数据表 */
+  get scenario() { return findScenario(this.scenarioId); }
   /** 亲征须两道政令，且一局至多 MAX_CHARGE 次 */
   get canQinzheng() { return !this.charge && this.chargeUsed < MAX_CHARGE && !this.over; }
   get hero() { return HEROES.find(h => h.id === this.heroId) || null; }
@@ -309,6 +421,14 @@ export class GameState {
     return `绍兴${cn}年 · ${['春', '夏', '秋', '冬'][(t - 1) % 4]}`;
   }
   get objective() {
+    const sc = this.scenario;
+    if (sc) {
+      const p = scenarioProgress(this, sc);
+      return {
+        text: `${sc.name} · ${p.text}`, items: p.items, scenario: sc,
+        kaifeng: false, yanjing: false, remain: this.jinCities.length,
+      };
+    }
     const kf = this.cities.kaifeng.owner === 'song';
     const yj = this.cities.yanjing.owner === 'song';
     const rest = this.jinCities.length;
@@ -316,7 +436,7 @@ export class GameState {
       : !yj ? '旧都已复 · 进取燕京'
         : rest > VICTORY_JIN_LIMIT ? `两京已复 · 扫清中原（金余 ${rest} 州）`
           : '燕云已归 · 中原底定';
-    return { kaifeng: kf, yanjing: yj, remain: rest, text };
+    return { kaifeng: kf, yanjing: yj, remain: rest, text, scenario: null, items: null };
   }
 
   say(text, type = 'info') {
@@ -353,6 +473,39 @@ export class GameState {
     return clamp(d, 2, 6);
   }
 
+  // ── 治略：即时开关与阅历 ─────────────────────────────────
+  /**
+   * 即时切换经营养成。关掉只冻结生效、不销毁数据，再开可续用已置设施与诸臣阅历；
+   * 这让设置面板能「即时生效」，又不至于一次误点抹掉半局经营成果。
+   */
+  setEconomy(on) {
+    const next = !!on;
+    if (next === this.economyOn && (!next || this.economy)) return false;
+    this.economyOn = next;
+    if (next && !this.economy) this.economy = createEconomy();
+    this.say(next
+      ? '【治略】推行营建与差遣之法：州郡可置屯田、仓廪、军器作坊、市舶；在朝诸臣可历练积功、进阶战法。'
+      : '【治略】新法暂罢，已置设施与诸臣阅历封存；复行时仍可续用。', 'event');
+    this.changed();
+    return true;
+  }
+
+  /** 阅历与升级提示的唯一入口：差遣、实战、驻节三处共用 */
+  grantExp(heroId, amount) {
+    if (!economyActive(this) || !heroId || !(amount > 0)) return;
+    const rec = this.economy.heroes[heroId]
+      || (this.economy.heroes[heroId] = { exp: 0, lastDispatchTurn: 0, count: 0 });
+    const before = heroProgress(this.economy, heroId).level;
+    rec.exp += Math.round(amount);
+    const after = heroProgress(this.economy, heroId);
+    if (after.level <= before) return;
+    const h = HEROES.find(x => x.id === heroId);
+    const gained = after.unlocked.filter(m => m.at > before && m.at <= after.level);
+    this.say(`【进阶】${h?.name || heroId}积功至 ${after.level} 级${gained.length
+      ? `，悟「${gained.map(m => m.name).join('」「')}」——${gained.map(m => m.desc).join('；')}`
+      : '。'}`, 'event');
+  }
+
   // ── 指令 ──────────────────────────────────────────────────
   _spend(cost = 1) {
     if (this.over) return false;
@@ -369,19 +522,23 @@ export class GameState {
     if (c.troops >= cap) { this.say(`${c.name}兵额已满（${cap} 营），当分驻他州。`, 'bad'); return false; }
     if (this.grain < 18 || this.gold < 12) { this.say('粮饷不足，无法整军。', 'bad'); return false; }
     if (!this._spend()) return false;
-    const add = Math.min(3 + (this.morale >= 70 ? 1 : 0), cap - c.troops);
-    this.grain -= 18; this.gold -= 12;
+    // 治略：军械足则器械精利，耗械 6 多募一营、省粮 3；攒械加攻势还是花械换兵，是一层真取舍
+    const armed = economyActive(this) && this.economy.arms >= TRAIN_ARMS_COST;
+    if (armed) this.economy.arms -= TRAIN_ARMS_COST;
+    const add = Math.min(3 + (this.morale >= 70 ? 1 : 0) + (armed ? 1 : 0), cap - c.troops);
+    this.grain -= 18 - (armed ? 3 : 0); this.gold -= 12;
     c.troops += add; this.morale += 3;
     c.lastTrainTurn = this.turn;
     const iso = !supplyMap(this).linked.has(c.id);
-    this.say(`【整军】${c.name}募练新军，兵力 +${add}，现 ${c.troops}／${cap} 营。${iso ? '（粮道未通，兵额减半）' : ''}`, 'good');
+    this.say(`【整军】${c.name}募练新军，兵力 +${add}，现 ${c.troops}／${cap} 营。${iso ? '（粮道未通，兵额减半）' : ''}${armed ? `（耗军械 ${TRAIN_ARMS_COST}，器械精利）` : ''}`, 'good');
     this.changed(); return true;
   }
 
   chouliang() {
     if (!this._spend()) return false;
     const gain = 38 + (this.hero?.grainBonus || 0) + Math.round(this.popularity / 12)
-      + Math.round((this.viceHero?.grainBonus || 0) * 0.5);
+      + Math.round((this.viceHero?.grainBonus || 0) * 0.5)
+      + (economyActive(this) ? officeBonus(this).grainBonus : 0);
     this.grain += gain; this.gold += 18; this.popularity -= 4;
     this.say(`【筹粮】江南转运使督办粮纲，得粮 +${gain}、缗钱 +18，民力稍困。`, 'good');
     this.changed(); return true;
@@ -481,6 +638,73 @@ export class GameState {
     this.changed(); return true;
   }
 
+  /**
+   * 营建：一类设施 0→3 级，级越高越贵。占一道政令，故「种田」与「北伐」争的是同一份稀缺资源。
+   * 城池易主时设施归零（见 battle），把经营投入变成可被打掉的沉没成本。
+   */
+  yingjian(cityId, buildingId) {
+    if (!economyActive(this)) { this.say('治略未行，无从营建。', 'bad'); return false; }
+    const b = BUILDINGS.find(x => x.id === buildingId);
+    const c = this.cities[cityId];
+    if (!b || !c || c.owner !== 'song') { this.say('须于己方州郡营建。', 'bad'); return false; }
+    const lv = buildingLevels(this.economy, cityId)[buildingId];
+    if (lv >= MAX_BUILDING_LEVEL) { this.say(`${c.name}${b.name}已至 ${MAX_BUILDING_LEVEL} 级，无可复加。`, 'bad'); return false; }
+    const cost = buildCost(lv);
+    if (this.gold < cost.gold || this.grain < cost.grain) {
+      this.say(`府库或仓廪不足：营建需缗钱 ${cost.gold}、粮 ${cost.grain}。`, 'bad'); return false;
+    }
+    if (!this._spend(cost.decree)) return false;
+    this.gold -= cost.gold; this.grain -= cost.grain;
+    const rec = this.economy.buildings[cityId] || (this.economy.buildings[cityId] = {});
+    rec[buildingId] = lv + 1;
+    this.economy.built++;
+    this.say(`【营建】${c.name}置${b.name}至 ${lv + 1} 级（耗钱 ${cost.gold}、粮 ${cost.grain}、政令 ${cost.decree}）：${b.effect(lv + 1)}。`, 'good');
+    this.changed(); return true;
+  }
+
+  /**
+   * 差遣：八员皆可历练，不必先拜将；但成长只在「在任」时生效，故培养谁与拜谁互相牵动。
+   * 每员每回合至多一次，全朝每回合至多两遣，掷点走 rngState 保持整局可复现。
+   */
+  chaiqian(heroId, cityId, taskId) {
+    if (!economyActive(this)) { this.say('治略未行，无从差遣。', 'bad'); return false; }
+    const h = HEROES.find(x => x.id === heroId);
+    const t = DISPATCH_TASKS.find(x => x.id === taskId);
+    const c = this.cities[cityId];
+    if (!h || !t || !c || c.owner !== 'song') { this.say('差遣须择在朝之臣与己方州郡。', 'bad'); return false; }
+    const rec = this.economy.heroes[heroId] || (this.economy.heroes[heroId] = { exp: 0, lastDispatchTurn: 0, count: 0 });
+    if (rec.lastDispatchTurn === this.turn) { this.say(`${h.name}本回合已有差遣。`, 'bad'); return false; }
+    if (this.economy.dispatchTurn >= DISPATCH_PER_TURN) {
+      this.say(`本回合差遣已足 ${DISPATCH_PER_TURN} 员，朝中不可一日无人。`, 'bad'); return false;
+    }
+    if (taskId === 'duzao' && this.gold < 8) { this.say('督造需缗钱 8 万贯，府库不足。', 'bad'); return false; }
+    if (!this._spend()) return false;
+    rec.lastDispatchTurn = this.turn;
+    rec.count++;
+    this.economy.dispatchTurn++;
+    this.economy.dispatches++;
+    const exp = 12 + Math.round(this.rand(0, 8)) + Math.round((h.politics || 0) / 3);
+    let extra = '';
+    if (taskId === 'tunken') {
+      const farm = buildingLevels(this.economy, cityId).tuntian;
+      const gain = 12 + farm * 6 + Math.round(this.rand(0, 6));
+      this.grain += gain;
+      extra = `劝课得粮 +${gain}${farm ? `（屯田 ${farm} 级）` : ''}`;
+    } else if (taskId === 'xunbian') {
+      const add = Math.min(2, Math.max(0, troopCap(this, c) - c.troops));
+      c.troops += add; this.popularity += 1;
+      extra = `收拢乡兵 +${add} 营`;
+    } else {
+      this.gold -= 8;
+      const gain = Math.max(0, Math.min(8, ARMS_CAP - this.economy.arms));
+      this.economy.arms += gain;
+      extra = `督造军械 +${gain}（耗钱 8）`;
+    }
+    this.say(`【差遣】${h.name}赴${c.name}${t.name}：${extra}，阅历 +${exp}。`, 'good');
+    this.grantExp(heroId, exp);
+    this.changed(); return true;
+  }
+
   /** 进军：己→己为移防，己→金为攻城 */
   jinjun(fromId, toId) {
     const from = this.cities[fromId], to = this.cities[toId];
@@ -520,6 +744,10 @@ export class GameState {
       const survivors = clamp(Math.round(send * (0.36 + clamp((atk - def) / atk, 0, 1) * 0.34)), 2, send);
       to.owner = side;
       to.troops = survivors;
+      // 治略：城池易主，历年营建一并付之东流——种田是有战略风险的投入
+      if (economyActive(this) && razeBuildings(this.economy, to.id)) {
+        this.say(`【治略】${to.name}易主，所置屯田仓廪尽付兵燹。`, 'bad');
+      }
       detail = `克${to.name}，存 ${survivors} 营，须再整军。`;
       if (side === 'jin') {
         for (const [key, name] of [['heroCity', '都督'], ['viceHeroCity', '分路都督']]) {
@@ -554,6 +782,11 @@ export class GameState {
     const stationTag = side === 'song' ? '都督亲督' : '都督坐镇';
     const geo = [P.cross ? `渡${P.cross}` : '', P.isolated ? (side === 'song' ? '孤军' : '孤城') : '', P.stationed ? stationTag : ''].filter(Boolean).join(' · ');
     this.say(`${label}${geo ? `〔${geo}〕` : ''}${from.name}出 ${send} 营（攻势 ${atk.toFixed(1)}）／${to.name}守军 ${defenderTroops} 营（守势 ${def.toFixed(1)}）：${detail}`, win ? (side === 'song' ? 'good' : 'bad') : (side === 'song' ? 'bad' : 'good'));
+    // 治略：战罢论功，在任将领按胜败累积阅历；金军叩边时守城亦算历练
+    if (economyActive(this)) {
+      const gain = win ? (side === 'song' ? 18 : 8) : 6;
+      for (const hid of [this.heroId, this.viceHeroId]) if (hid) this.grantExp(hid, gain);
+    }
     this.lastBattle = { from: from.id, to: to.id, side, win, atk, def };
     return { win, atk, def };
   }
@@ -580,25 +813,48 @@ export class GameState {
       const localIncome = artStack(this, c.id).vice?.income || 0;
       return n + c.yieldGrain * relief * (1 + localIncome);
     }, 0);
-    const income = Math.round(yieldSum * (0.55 + this.popularity / 190) * (1 + (art?.income || 0)));
+    // 治略：屯田增岁赋、诸臣理政加成，都并入同一条度支公式；关闭时两项皆为 0
+    const eco = economyYield(this);
+    const inc = economyIncome(this);
+    const income = Math.round((yieldSum + inc.flat) * (0.55 + this.popularity / 190)
+      * (1 + (art?.income || 0) + inc.ratio));
     // 戍守转运：占得越远、越散，每回合的后勤负担越重，北伐不能只算进兵那一笔账
-    const garrison = Math.round(this.songCities.reduce((n, c) => {
+    const garrisonRaw = this.songCities.reduce((n, c) => {
       const hops = sup.dist[c.id];
       const far = Number.isFinite(hops) ? Math.min(GEO.garrisonFarMax, hops * GEO.garrisonPerHop) : GEO.garrisonFarMax;
       return n + GEO.garrisonBase + far;
-    }, 0));
+    }, 0);
+    const garrison = Math.max(0, Math.round(garrisonRaw - eco.upkeepRelief));
     const staffCost = this.viceHero ? GEO.viceUpkeep : 0;
     const upkeep = Math.round(this.totalTroops * 0.32) + garrison + staffCost + (this.hero?.upkeep || 0);
     const net = income - upkeep;
     this.grain += net;
-    this.gold += Math.round(this.songCities.length * 1.6) + (this.hero?.goldBonus || 0);
+    this.gold += Math.round(this.songCities.length * 1.6) + (this.hero?.goldBonus || 0) + eco.gold;
+    if (economyActive(this)) this.economy.arms = Math.min(ARMS_CAP, this.economy.arms + eco.arms);
     this.say(`【度支】岁入 ${income}，军耗 ${upkeep}（戍守转运 ${garrison}${staffCost ? `，分路幕府 ${staffCost}` : ''}），仓廪净 ${net >= 0 ? '+' : ''}${net}；府库进钱。${sup.isolated.length ? `（孤城 ${sup.isolated.length} 处，粮道未通）` : ''}`, net >= 0 ? 'info' : 'bad');
-    if (this.grain <= 0) { this.famine++; this.morale -= 8; this.popularity -= 5; this.say('军中乏食，已有逃亡。', 'bad'); }
-    else this.famine = 0;
+    if (economyActive(this) && (eco.gold || eco.arms || eco.upkeepRelief || inc.farms || inc.ratio)) {
+      this.say(`【治略·度支】屯田增赋 ${Math.round(inc.flat)}，市舶 +${eco.gold} 钱，作坊 +${eco.arms} 军械（存 ${this.economy.arms}），仓廪省戍粮 ${eco.upkeepRelief.toFixed(2)}${inc.ratio ? `，诸臣理政粮赋 +${Math.round(inc.ratio * 100)}%` : ''}。`, 'info');
+    }
+    if (this.grain <= 0) {
+      const relief = economyActive(this) ? consumeGranary(this.economy) : null;
+      if (relief) {
+        this.grain = 12;
+        this.say(`【备荒】${this.cities[relief]?.name || relief}开仓放赈，仓廪降一级，暂免一岁之饥。`, 'good');
+      } else {
+        this.famine++; this.morale -= 8; this.popularity -= 5;
+        this.say('军中乏食，已有逃亡。', 'bad');
+      }
+    } else this.famine = 0;
 
     // 自然征募 / 士气回复
     this.songCities.forEach(c => { if (this.grain > 30 && c.troops < c.troops0 + 4 && this.nextRandom() < 0.45) c.troops += 1; });
     this.morale = clamp(this.morale + 2, 0, 100);
+    // 治略：持节在外的将领每回合自然积 2 点阅历
+    if (economyActive(this)) {
+      for (const [hid, city] of [[this.heroId, this.heroCity], [this.viceHeroId, this.viceHeroCity]]) {
+        if (hid && city && this.cities[city]?.owner === 'song') this.grantExp(hid, 2);
+      }
+    }
 
     // 粮道不通：士气渐堕，久戍逃亡；打通间道方可解
     if (sup.isolated.length) {
@@ -620,7 +876,7 @@ export class GameState {
     if (this.truce > 0) {
       this.truce--;
       this.say('【和议】金人按兵不动，边境暂宁。', 'info');
-    } else if (season < 2) {
+    } else if (season < 2 && !this.scenario?.jinEveryTurn) {
       this.say('【边报】春夏天暖，金骑北还，淮上暂宁——此正用兵之时。', 'good');
     } else {
       this.jinAI();
@@ -646,6 +902,7 @@ export class GameState {
 
     if (!this.over) {
       this.turn++;
+      if (this.economy) this.economy.dispatchTurn = 0;   // 差遣额度按回合重置
       this.decree = this.calcDecree();
       this.charge = 0;
       this.clampAll();
@@ -689,7 +946,11 @@ export class GameState {
   }
 
   maybeEvent() {
+    const sc = this.scenario;
+    // 短剧本只放自己的事件，免得「秦桧归→和议→风波亭」这类长线朝局串进九回合的攻城关
+    const allow = sc?.events;
     const pool = EVENTS.filter(e => {
+      if (allow && !allow.includes(e.id)) return false;
       if (e.once && this.seenEvents.has(e.id)) return false;
       if (e.cond && !e.cond(this)) return false;
       return true;
@@ -697,9 +958,9 @@ export class GameState {
     if (!pool.length) return;
     // 前两回合不出事件；之后约四成概率，每 5 回合保底一次。
     // 连锁事件（priority>0）一旦条件成立便优先且不掷点，免得前后相因的剧情断线。
-    if (this.turn < 3) return;
+    if (this.turn < (sc?.eventMinTurn ?? 3)) return;
     const top = Math.max(0, ...pool.map(e => e.priority || 0));
-    if (!top && this.turn % 5 !== 0 && this.nextRandom() > 0.42) return;
+    if (!top && this.turn % 5 !== 0 && this.nextRandom() > (sc?.eventChance ?? 0.42)) return;
     const bag = top ? pool.filter(e => (e.priority || 0) === top) : pool;
     const ev = this.pick(bag);
     this.seenEvents.add(ev.id);
@@ -724,6 +985,13 @@ export class GameState {
   }
 
   checkEnd() {
+    const sc = this.scenario;
+    if (sc) {
+      const R = scenarioResult(this, sc);
+      // 剧本在「回合上限 +1」结算，战报仍记在第 N 回合，不虚增一回合
+      if (R) return this.finish(R.kind, R.title, R.text, Math.min(this.turn, this.maxTurns));
+      return null;
+    }
     const kf = this.cities.kaifeng.owner === 'song';
     const yj = this.cities.yanjing.owner === 'song';
     const rest = this.jinCities.length;
@@ -740,9 +1008,9 @@ export class GameState {
     return null;
   }
 
-  finish(kind, title, text) {
+  finish(kind, title, text, atTurn = this.turn) {
     if (this.over) return;
-    this.over = { kind, title, text, turn: this.turn };
+    this.over = { kind, title, text, turn: atTurn };
     this.say(`【结局】${title}——${text}`, kind === 'win' ? 'good' : 'bad');
     this.emit('end', this.over);
   }
@@ -763,6 +1031,8 @@ export function battleParams(state, from, to, side, send) {
   const atkParts = [];
   const songAtk = side === 'song';
   const songDef = side === 'jin';          // 守方为宋军
+  // 治略：军械存量与在任将领阅历合成一个入口，实战／推演／托管天然同源
+  const ecoBonus = economyCombatBonus(state);
   // 战法：主帅常效及于全军，分帅驻节本城再添一份本路战法
   const atkA = artStack(state, from.id);
   const defA = artStack(state, to.id);
@@ -775,6 +1045,7 @@ export function battleParams(state, from, to, side, send) {
     if (state.charge) atkParts.push(['御驾亲征', 0.25]);
     atkParts.push(['都督', state.hero?.atk || 0]);
     atkParts.push(['军械', state.gearBonus]);
+    if (ecoBonus.atk) atkParts.push(['治略·器械与阅历', ecoBonus.atk]);
     atkParts.push(['朝论', (state.court.zhan - state.court.he) / 500]);
     const route = commanderAt(state, from.id);
     const stationed = route !== null;
@@ -807,7 +1078,9 @@ export function battleParams(state, from, to, side, send) {
     if (sa) atkParts.push(['连营犄角', sa]);
   }
 
-  const atkBonus = Math.max(0.3, 1 + atkParts.reduce((n, p) => n + p[1], 0));
+  // 短剧本可单独调金军锐气：九回合的守城关不该被长局那套「积怒＋国势」一击压垮
+  const atkScale = songAtk ? 1 : (state.scenario?.jinAtkScale ?? 1);
+  const atkBonus = Math.max(0.3, 1 + atkParts.reduce((n, p) => n + p[1], 0) * atkScale);
   const wall = (to.capitalOfJin || to.capitalOfSong || to.seat ? 0.18 : 0.08)
     + (to.id === 'kaifeng' || to.id === 'yanjing' ? 0.08 : 0);
   const terrain = TERRAIN_DEFENSE[to.terrain] || 0;
@@ -820,6 +1093,7 @@ export function battleParams(state, from, to, side, send) {
     if (state.stationAt(to.id)) defParts.push(['都督坐镇', GEO.stationedDef]);
     if (defA.main?.defend) defParts.push([`${defA.main.short}·守`, defA.main.defend]);
     if (defA.vice?.defend) defParts.push([`${defA.vice.short}·分路守`, defA.vice.defend]);
+    if (ecoBonus.defend) defParts.push(['治略·诸臣阅历', ecoBonus.defend]);
   }
   const defBonus = Math.max(0.4, 1 + defParts.reduce((n, p) => n + p[1], 0));
 

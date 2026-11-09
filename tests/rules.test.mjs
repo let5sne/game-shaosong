@@ -9,18 +9,20 @@ import assert from 'node:assert/strict';
 import {
   GameState, supplyMap, marchCost, battleParams, previewBattle, winChance,
   MAX_CHARGE, VICTORY_JIN_LIMIT, VICE_COST_GOLD, VICE_COURT_HE,
+  scenarioProgress, scenarioGoalText,
 } from '../src/rules.js';
 import { serialize, restore } from '../src/save.js';
 import {
   chooseAction, applyAction, chooseEvent, newTurnContext,
 } from '../src/autoplay.js';
-import { EVENTS, DIFFICULTIES, CITY_DEFS } from '../src/data.js';
+import { EVENTS, DIFFICULTIES, CITY_DEFS, SCENARIOS } from '../src/data.js';
 
 const snapshot = s => JSON.stringify({
   turn: s.turn, grain: s.grain, gold: s.gold, morale: s.morale,
   popularity: s.popularity, decree: s.decree, rng: s.rngState,
   over: s.over, heroId: s.heroId, heroCity: s.heroCity, chargeUsed: s.chargeUsed,
   viceHeroId: s.viceHeroId, viceHeroCity: s.viceHeroCity,
+  scenario: s.scenarioId ?? null,
   flags: [...(s.flags || [])],
   cities: CITY_DEFS.map(d => [d.id, s.cities[d.id].owner, s.cities[d.id].troops]),
   logs: s.logs.map(l => l.text),
@@ -328,4 +330,140 @@ test('三档国势的回合上限依次收紧', () => {
   assert.ok(easy.maxTurns > normal.maxTurns);
   assert.ok(normal.maxTurns > hard.maxTurns);
   assert.ok(hard.jinMight > normal.jinMight);
+});
+
+// ── 短剧本关 ────────────────────────────────────────────────
+const opening = s => JSON.stringify({
+  turn: s.turn, grain: s.grain, gold: s.gold, court: s.court,
+  heroId: s.heroId, heroCity: s.heroCity, notes: s.variant.notes,
+  cities: CITY_DEFS.map(d => [d.id, s.cities[d.id].owner, s.cities[d.id].troops]),
+});
+
+test('短剧本固定开局：异局号起点相同，同局号整关仍可复现', () => {
+  const a = new GameState({ seed: 101, scenario: 'shunchang' });
+  const b = new GameState({ seed: 202, scenario: 'shunchang' });
+  assert.equal(opening(a), opening(b), '剧本不抽随机变局，任何局号起点一致');
+  assert.equal(a.variant.notes.length, 0);
+  assert.equal(a.scenario.name, '顺昌婴城');
+  assert.equal(a.hero.name, '刘锜');
+  assert.equal(a.heroCity, 'shouchun');
+
+  const c = new GameState({ seed: 101, scenario: 'shunchang' });
+  step(a); step(c);
+  assert.equal(snapshot(a), snapshot(c), '局号决定掷点，同号整关仍逐字复现');
+  const d = new GameState({ seed: 303, scenario: 'shunchang' });
+  step(d);
+  assert.notEqual(snapshot(a), snapshot(d));
+});
+
+test('无效剧本 id 回退长局，长局基线不受剧本影响', () => {
+  const s = new GameState({ seed: 8, scenario: 'does-not-exist' });
+  assert.equal(s.scenarioId, null);
+  assert.equal(s.scenario, null);
+  assert.equal(s.maxTurns, DIFFICULTIES[1].maxTurns);
+  assert.equal(s.variant.notes.length, 2);
+  assert.match(s.objective.text, /东京开封/);
+  assert.equal(s.objective.items, null);
+});
+
+test('顺昌：撑过回合上限且两城不失即胜；中途失守可夺回，终局失守方败', () => {
+  const s = new GameState({ seed: 1, scenario: 'shunchang' });
+  s.turn = s.maxTurns + 1;
+  s.changed();
+  assert.equal(s.over?.kind, 'win');
+  assert.equal(s.over.title, '婴城不堕');
+  assert.equal(s.over.turn, s.maxTurns, '结局不虚增一回合');
+
+  const t = new GameState({ seed: 2, scenario: 'shunchang' });
+  t.cities.chuzhou.owner = 'jin';
+  t.changed();
+  assert.equal(t.over, null, '中途易主留余地反攻，不立即判负');
+  assert.equal(scenarioProgress(t, t.scenario).holdDone, false);
+  t.cities.chuzhou.owner = 'song';   // 夺回
+  t.turn = t.maxTurns + 1;
+  t.changed();
+  assert.equal(t.over?.kind, 'win');
+
+  const u = new GameState({ seed: 3, scenario: 'shunchang' });
+  u.cities.chuzhou.owner = 'jin';
+  u.turn = u.maxTurns + 1;
+  u.changed();
+  assert.equal(u.over?.kind, 'lose');
+  assert.equal(u.over.title, '淮上溃防');
+});
+
+test('顺昌：袭取海州即刻大捷；郾城：克复两翼即刻胜，超时则班师', () => {
+  const a = new GameState({ seed: 4, scenario: 'shunchang' });
+  a.cities.haizhou.owner = 'song';
+  a.changed();
+  assert.equal(a.over?.title, '顺昌大捷');
+  assert.ok(a.over.turn < a.maxTurns);
+
+  const b = new GameState({ seed: 5, scenario: 'yancheng' });
+  assert.equal(b.hero.name, '岳飞');
+  assert.equal(b.cities.caizhou.owner, 'song');
+  b.cities.yingtian.owner = 'song';
+  b.cities.xuzhou.owner = 'song';
+  b.changed();
+  assert.equal(b.over?.kind, 'win');
+  assert.equal(b.over.title, '郾城破阵');
+
+  const c = new GameState({ seed: 6, scenario: 'yancheng' });
+  c.turn = c.maxTurns + 1;
+  c.changed();
+  assert.equal(c.over?.kind, 'lose');
+  assert.equal(c.over.title, '班师之诏');
+});
+
+test('剧本事件白名单：只出本关事件，专属事件也不会串进长局', () => {
+  const s = new GameState({ seed: 7, scenario: 'shunchang' });
+  s.turn = 5;                          // 5 的倍数，必有普通事件
+  for (let i = 0; i < 20; i++) {
+    s.pendingEvent = null;
+    s.seenEvents.clear();
+    s.maybeEvent();
+    assert.ok(s.pendingEvent, '保底回合应出事件');
+    assert.ok(s.scenario.events.includes(s.pendingEvent.id), `串入了非剧本事件 ${s.pendingEvent.id}`);
+  }
+  const t = new GameState({ seed: 8, random: false });
+  t.turn = 5;
+  const own = ['shunchang_zaozhou', 'shunchang_yezhuo', 'yancheng_guazima'];
+  for (let i = 0; i < 20; i++) {
+    t.pendingEvent = null;
+    t.seenEvents.clear();
+    t.maybeEvent();
+    assert.ok(!own.includes(t.pendingEvent?.id), '剧本专属事件不应出现在长局');
+  }
+});
+
+test('剧本存档往返：scenarioId 保留，续玩与不中断的一局完全一致', () => {
+  const a = new GameState({ seed: 9, scenario: 'yancheng' });
+  step(a, 3);
+  const raw = serialize(a);
+  assert.equal(JSON.parse(raw).scenarioId, 'yancheng');
+  const b = new GameState({ seed: 1 });
+  assert.ok(restore(b, raw));
+  assert.equal(b.scenarioId, 'yancheng');
+  assert.equal(b.scenario.name, '郾城破阵');
+  assert.equal(b.maxTurns, a.maxTurns);
+  step(a, 30); step(b, 30);
+  assert.equal(snapshot(a), snapshot(b));
+});
+
+test('剧本目标声明自洽：marks 覆盖必守与必取，军令文案与进度同步', () => {
+  assert.equal(SCENARIOS.length, 2);
+  for (const sc of SCENARIOS) {
+    const s = new GameState({ seed: 10, scenario: sc.id });
+    const p = scenarioProgress(s, sc);
+    assert.equal(p.items.length, sc.hold.length + sc.capture.length + sc.bonus.length);
+    assert.ok(p.items.some(i => !i.done), '开局不应已竟全功');
+    for (const id of [...sc.hold, ...sc.capture]) {
+      assert.ok(sc.marks.includes(id), `${sc.id} 的目标城 ${id} 未加朱批圈`);
+      assert.ok(s.cities[id], `${sc.id} 引用了不存在的城 ${id}`);
+    }
+    assert.equal(s.objective.items.length, p.items.length);
+    assert.equal(s.objective.scenario.id, sc.id);
+    assert.ok(s.scenario.jinEveryTurn, '短关金人每回合叩边');
+    assert.match(scenarioGoalText(sc), /回合为限/);
+  }
 });

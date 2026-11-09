@@ -309,6 +309,41 @@ export const EVENTS = [
       { label: '「与民休息」', desc: '民心 +12，粮秣 +40，主战 -10', apply: s => { s.popularity += 12; s.grain += 40; s.court.zhan -= 10; } },
     ],
   },
+
+  // ── 短剧本专属事件：cond 锁死局号类型，长局不会串入 ──────────
+  {
+    id: 'shunchang_zaozhou', once: true, priority: 1, title: '凿沉归舟', tag: '顺昌',
+    cond: s => s.scenarioId === 'shunchang' && s.cities.shouchun.owner === 'song',
+    text: '诸将见金骑蔽野，请携家口登舟南还。刘锜命人尽凿其舟，积薪于门下：「脱有不测，即焚吾家，毋辱敌手。」城中始知无退路。',
+    options: [
+      { label: '凿舟示死', desc: '士气 +12，寿春 +3 营，民心 -2', apply: s => { s.morale += 12; s.cities.shouchun.troops += 3; s.popularity -= 2; } },
+      { label: '留舟以备退路', desc: '民心 +4，粮秣 +12，士气 -6', apply: s => { s.popularity += 4; s.grain += 12; s.morale -= 6; } },
+    ],
+  },
+  {
+    id: 'shunchang_yezhuo', title: '夜斫金营', tag: '顺昌',
+    cond: s => s.scenarioId === 'shunchang' && s.turn >= 3 && s.cities.shouchun.owner === 'song',
+    text: '暑月暴雨，金营疲甚。帐下请选锐卒五百，衔枚夜出，以雷霆不及掩耳之势扰其营垒。',
+    options: [
+      { label: '选锐夜出', desc: '士气 +8，蔡州／徐州金兵各 -2 营，粮秣 -12', apply: s => {
+        s.morale += 8; s.grain -= 12;
+        for (const id of ['caizhou', 'xuzhou']) {
+          const c = s.cities[id];
+          if (c.owner === 'jin') c.troops = Math.max(1, c.troops - 2);
+        }
+      } },
+      { label: '婴城不出', desc: '寿春 +2 营，粮秣 +8', apply: s => { s.cities.shouchun.troops += 2; s.grain += 8; } },
+    ],
+  },
+  {
+    id: 'yancheng_guazima', once: true, priority: 1, title: '拐子马合围', tag: '郾城',
+    cond: s => s.scenarioId === 'yancheng' && s.cities.caizhou.owner === 'song',
+    text: '金人以铁浮图居中、拐子马两翼包抄，平地无险可依。诸军皆言当退，岳侯独持步阵不动：「试看背嵬军破之。」',
+    options: [
+      { label: '背嵬步阵迎击', desc: '前线兵力 +3，士气 +12，主战 +6，粮秣 -10', apply: s => { s.reinforceFront(3); s.morale += 12; s.court.zhan += 6; s.grain -= 10; } },
+      { label: '敛兵入城', desc: '粮秣 +22，士气 -4，主战 -6', apply: s => { s.grain += 22; s.morale -= 4; s.court.zhan -= 6; } },
+    ],
+  },
 ];
 
 export const TERRAIN_LABEL = { plain: '平原', mountain: '山险', river: '水网', coast: '滨海' };
@@ -338,3 +373,82 @@ export const DIFFICULTIES = [
     jinMight: 0.12, zhanDelta: -6, decreeBonus: 1, luck: 'bad',
   },
 ];
+
+/**
+ * 短剧本关：固定开局 + 特定目标 + 事件白名单，复用长局同一套规则、战法与舆图。
+ * 以本图州郡约略拟史地（顺昌拟寿春、郾城拟蔡州一带），非精确考据。
+ *
+ * 目标只用城池 id 声明，判定与进度一律交给 rules.js 的通用解释器：
+ *   hold    必须守住的州郡，任一易主即败
+ *   capture 必须克复的州郡，全部归宋即胜
+ *   bonus   额外的进取出路，达成可提前大捷／改换结局文案
+ *   marks   舆图上加朱批圈的目标城
+ * 故存档只需存剧本 id，序列化不含任何函数。
+ */
+export const SCENARIOS = [
+  {
+    id: 'shunchang', name: '顺昌婴城', tag: '守 · 九回合', era: '绍兴十年 · 夏',
+    brief: '金人毁盟南下，刘锜以八字军赴东京留守，行至顺昌而敌骑已薄城下。城孤粮少，诸将请退舟南还；刘锜凿舟沉之，示无去意。\n此关以淮南「寿春」当顺昌：不须席卷中原，只要婴城拒骑、挫其锐锋，撑过金人九轮猛攻。',
+    tactic: '守寿春、楚州为本；仓廪薄、政令少，整军与移防须算准哪一处先撑不住。若余力尚存，可自楚州渡淮袭海州，反客为主求一场大捷。',
+    difficulty: 'normal', maxTurns: 9,
+    grain: 85, gold: 45, popularity: 66, morale: 64,
+    court: { zhan: 64, he: 36 },
+    heroId: 'liqi', heroCity: 'shouchun',
+    jinFury: 1, jinMight: 0.06, jinAtkScale: 0.85,
+    // 关陕已失，去掉长局的孤城干扰；淮南前线兵少，金军三路重兵压淮
+    owners: { changan: 'jin' },
+    troops: {
+      shouchun: 9, chuzhou: 8, xiangyang: 6, luzhou: 6, yangzhou: 5, jiankang: 6,
+      caizhou: 16, xuzhou: 15, haizhou: 13, yingtian: 12, kaifeng: 18, dengzhou: 8, daming: 9,
+    },
+    jinEveryTurn: true,
+    eventChance: 0.55, eventMinTurn: 2,
+    events: ['shunchang_zaozhou', 'shunchang_yezhuo', 'kuibing', 'junxie', 'caoyun', 'minxian', 'qingzhan'],
+    hold: ['shouchun', 'chuzhou'],
+    capture: [],
+    bonus: ['haizhou'],
+    marks: ['shouchun', 'chuzhou', 'haizhou'],
+    strategy: { targets: ['haizhou', 'caizhou'], guard: ['shouchun', 'chuzhou'] },
+    winKind: 'hold',
+    winTitle: '顺昌大捷', winText: '凿舟示死，夜斫金营，复渡淮袭取海州。金人所谓「铁浮图」，卒不能越淮南一步。',
+    holdTitle: '婴城不堕', holdText: '九轮猛攻，城头旗未倒。金骑粮尽引还，淮南诸州赖以全。此局不以拓地论功，以不失去土为胜。',
+    greatTitle: '顺昌大捷',
+    loseHoldTitle: '淮上溃防', loseHoldText: '寿春、楚州有一处不守，淮河天险遂与金人共之，江左门户洞开。',
+    timeoutTitle: '', timeoutText: '',
+  },
+  {
+    id: 'yancheng', name: '郾城破阵', tag: '攻 · 十二回合', era: '绍兴十年 · 秋',
+    brief: '岳家军已进至郾城一带，金人以铁浮图、拐子马合围。平地无险可依，唯背嵬步阵硬撼之。\n此关以「蔡州」当郾城前锋大营：十二回合内克复应天府与徐州，截断开封东南两翼；前军大营与淮南后路皆不可失。',
+    tactic: '大营在蔡州，出兵不必次次济淮，宜先取应天、再图徐州；开封守军最厚，非所急。金人每回合反扑大营，攻得越深越要留兵守后。',
+    difficulty: 'normal', maxTurns: 12,
+    grain: 150, gold: 90, popularity: 60, morale: 72,
+    court: { zhan: 74, he: 26 },
+    heroId: 'yuefei', heroCity: 'caizhou',
+    jinFury: 1, jinMight: 0.05, jinAtkScale: 0.85,
+    owners: { caizhou: 'song', changan: 'jin' },
+    troops: {
+      caizhou: 15, shouchun: 9, chuzhou: 9, xiangyang: 7, luzhou: 8, jiankang: 7,
+      yingtian: 16, xuzhou: 17, kaifeng: 22, dengzhou: 10, haizhou: 12, luoyang: 9, daming: 10,
+    },
+    jinEveryTurn: true,
+    eventChance: 0.5, eventMinTurn: 2,
+    events: ['yancheng_guazima', 'yancheng', 'qingzhan', 'junxie', 'kuibing', 'caoyun', 'huaixi'],
+    hold: ['caizhou', 'shouchun'],
+    capture: ['yingtian', 'xuzhou'],
+    bonus: ['haizhou'],
+    marks: ['caizhou', 'yingtian', 'xuzhou', 'shouchun'],
+    strategy: { targets: ['yingtian', 'xuzhou', 'haizhou'], guard: ['caizhou', 'shouchun'] },
+    winKind: 'capture',
+    winTitle: '郾城破阵', winText: '背嵬步阵既摧拐子马，应天、徐州次第归版籍。开封东南两翼已断，朱仙镇在望。',
+    holdTitle: '', holdText: '',
+    greatTitle: '直抵朱仙镇', greatText: '两翼既克，兼取海州，京东粮道尽入我手。父老牵牛载酒，言金人已议弃东京而北去。',
+    loseHoldTitle: '后路断绝', loseHoldText: '前军大营或淮南后路一失，深入之师便成孤军。北伐之锐，不待敌摧而已自折。',
+    timeoutTitle: '班师之诏', timeoutText: '十二回合已尽，两翼未下。一日十二金字牌，十年之功，废于一旦。',
+  },
+];
+
+/** 供存档回查：只认已登记的剧本 id，异常值一律按长局处理 */
+export function findScenario(id) {
+  return SCENARIOS.find(s => s.id === id) || null;
+}
+

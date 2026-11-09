@@ -1,52 +1,64 @@
 import './style.css';
 import { GameState } from './rules.js';
 import { createUI } from './ui.js';
+import { createSettings, derive, RESUME_KEY } from './settings.js';
 
 const sceneEl = document.getElementById('scene');
 const uiEl = document.getElementById('ui');
 
-const params = new URLSearchParams(location.search);
-const seedArg = Number(params.get('seed'));
-// ?seed=123456 固定局号：变局、战斗、事件全部由此派生，可重演同一局
-const fixedSeed = params.has('seed') && Number.isFinite(seedArg) && seedArg > 0 ? seedArg >>> 0 : null;
+// 所有预览参数、局号、战局与偏好统一由 settings.js 解析：
+// URL 显式参数 > 已保存偏好 > 出厂默认，设置面板与链接始终一致。
+const settings = createSettings(location.search);
+const systemReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ?? false;
 
-// 首屏只依赖 CSS + 规则层 + UI：开场页与状态条先画出来，
-// three.js 与整套程序化建模走异步 chunk，不再压在首屏关键路径上。
-const state = new GameState(fixedSeed === null ? {} : { seed: fixedSeed });
-const ui = createUI(uiEl, state, { seed: fixedSeed });
-
-sceneEl.innerHTML = '<div class="scene-loading">三 维 舆 图 展 开 中 …</div>';
-
-// 性能档：可由 ?quality=low/high 覆盖，否则按核心数、内存、屏幕与 DPR 自动判定。
-// 空间 chunk/LOD 仍需真机帧率数据再排期，这里只做「同一套几何的不同密度与开销」。
-function chooseQuality() {
-  const q = params.get('quality');
-  if (q === 'low' || q === 'high') return q;
+// 自动性能档按核心数、内存、屏幕与 DPR 判定；空间 chunk/LOD 仍需真机帧率数据再排期。
+function autoQuality() {
   const cores = navigator.hardwareConcurrency || 8;   // 未知时按充足估计，不误降档
   const mem = navigator.deviceMemory || 8;
   const narrow = window.matchMedia?.('(max-width: 760px)')?.matches;
   return (cores <= 4 || mem <= 4 || narrow || (window.devicePixelRatio || 1) > 2.5) ? 'low' : 'high';
 }
-const quality = chooseQuality();
-const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ?? false;
-// 宣纸增强（墨晕／描边／纸纹／色调）默认关闭：实机 A/B 后更偏好原版清透的宣纸沙盘。
-// ?ink=1 显式开启，?ink=0 明确关闭；world.ink.setEnabled() 仍可在运行时逐帧切换做 A/B 对比。
-const ink = params.get('ink') === '1';
+const cfg = derive(settings.values, { systemReducedMotion, autoQuality: autoQuality() });
+const { quality, reducedMotion, ink, units, tex, ctex, capitals, trees, terrain, mat, grade, economy } = cfg;
+const fixedSeed = cfg.seed;                 // ?seed=123456 固定局号：变局、战斗、事件全由此派生
+const initialScenario = cfg.scenario;       // ?scenario=shunchang 预选短剧本
 
-// 调试／自动化入口：可在控制台查看局面或启动托管推演
-window.__shaosong = { state, ui, world: null, fixedSeed, worldReady: null, quality, reducedMotion, ink };
+// 首屏只依赖 CSS + 规则层 + UI：开场页与状态条先画出来，
+// three.js 与整套程序化建模走异步 chunk，不再压在首屏关键路径上。
+const state = new GameState({
+  ...(fixedSeed === null ? {} : { seed: fixedSeed }),
+  ...(initialScenario ? { scenario: initialScenario } : {}),
+  economy,
+});
+const ui = createUI(uiEl, state, {
+  seed: fixedSeed, scenario: initialScenario,
+  difficulty: cfg.difficulty, muted: cfg.muted, settings,
+  reducedMotion, quality, grade,   // 开场页运镜与低配／减弱动效互斥
+});
 
-// ?auto=1 打开即进入托管推演，不必等 WebGL 初始化。托管期间的 state 事件
-// 在 world 尚未挂载时由可选链安全跳过，attachWorld 会以当前局面重绘一次。
-if (params.has('auto')) {
-  ui.startAuto();
-}
+sceneEl.innerHTML = '<div class="scene-loading">三 维 舆 图 展 开 中 …</div>';
+
+// 调试／自动化入口：可在控制台查看局面、生效配置或启动托管推演
+window.__shaosong = {
+  state, ui, world: null, fixedSeed, initialScenario, worldReady: null,
+  quality, reducedMotion, ink, units, tex, ctex, capitals, trees, terrain, mat, grade, economy,
+  settings, derived: cfg,
+};
+
+// 设置面板改动渲染参数后重载：若原本在对局中，自动续回原局面，不把官家踢回开场页。
+let resumePending = false;
+try {
+  resumePending = sessionStorage.getItem(RESUME_KEY) === '1';
+  if (resumePending) sessionStorage.removeItem(RESUME_KEY);
+} catch (_) { /* 隐私模式 */ }
+if (cfg.auto) ui.startAuto();
+else if (resumePending) ui.resumeGame();
 
 async function mountWorld() {
   try {
     const { createWorld } = await import('./world.js');
     sceneEl.replaceChildren();
-    const world = createWorld(sceneEl, state, { onPick: id => ui.handlePick(id), quality, reducedMotion, ink });
+    const world = createWorld(sceneEl, state, { onPick: id => ui.handlePick(id), quality, reducedMotion, ink, units, tex, ctex, capitals, trees, terrain, mat });
     window.__shaosong.world = world;
     ui.attachWorld(world);
     return world;
