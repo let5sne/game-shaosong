@@ -19,7 +19,7 @@ function autoQuality() {
   return (cores <= 4 || mem <= 4 || narrow || (window.devicePixelRatio || 1) > 2.5) ? 'low' : 'high';
 }
 const cfg = derive(settings.values, { systemReducedMotion, autoQuality: autoQuality() });
-const { quality, reducedMotion, ink, units, tex, ctex, capitals, trees, terrain, mat, grade, economy } = cfg;
+const { quality, reducedMotion, ink, atmos, units, tex, ctex, capitals, trees, terrain, mat, grade, economy } = cfg;
 const fixedSeed = cfg.seed;                 // ?seed=123456 固定局号：变局、战斗、事件全由此派生
 const initialScenario = cfg.scenario;       // ?scenario=shunchang 预选短剧本
 
@@ -41,7 +41,7 @@ sceneEl.innerHTML = '<div class="scene-loading">三 维 舆 图 展 开 中 …<
 // 调试／自动化入口：可在控制台查看局面、生效配置或启动托管推演
 window.__shaosong = {
   state, ui, world: null, fixedSeed, initialScenario, worldReady: null,
-  quality, reducedMotion, ink, units, tex, ctex, capitals, trees, terrain, mat, grade, economy,
+  quality, reducedMotion, ink, atmos, units, tex, ctex, capitals, trees, terrain, mat, grade, economy,
   settings, derived: cfg,
 };
 
@@ -58,7 +58,7 @@ async function mountWorld() {
   try {
     const { createWorld } = await import('./world.js');
     sceneEl.replaceChildren();
-    const world = createWorld(sceneEl, state, { onPick: id => ui.handlePick(id), quality, reducedMotion, ink, units, tex, ctex, capitals, trees, terrain, mat });
+    const world = createWorld(sceneEl, state, { onPick: id => ui.handlePick(id), quality, reducedMotion, ink, atmos, units, tex, ctex, capitals, trees, terrain, mat });
     window.__shaosong.world = world;
     ui.attachWorld(world);
     return world;

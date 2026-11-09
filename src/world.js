@@ -470,8 +470,89 @@ function ridgeRing({ r, h, top, bot, op, phase }) {
   }));
 }
 
+// ── 大气透视（?atmos=1）────────────────────────────────────
+// 天穹是一颗跟随相机的内表面球：顶点色只存「相对底色」的线性乘子，
+// material.color 从 scene.background 同步，因此开场页主题改天色时穹顶跟着变，
+// clearTheme 逐值还原的契约也不受影响。用顶点色而非渐变 shader，
+// 是为了不写 onBeforeCompile —— 那是 ink.js 已经踩过的 program 翻倍坑。
+// 关键：可见天空通常只占仰角 0~25°（h=sinθ ≤ 0.42），所以梯度要压在这段里，
+// 不能一路铺到天顶；且以「抽蓝」而非「压暗」为主，整幅平均明度才不会被拖下去。
+const SKY_GRADIENT = {
+  paper: [
+    [-1.00, [0.96, 0.92, 0.80]],
+    [ 0.00, [1.06, 1.03, 0.96]],   // 地平线：最亮最淡，远山由此融进天色
+    [ 0.18, [1.06, 1.02, 0.86]],
+    [ 0.38, [1.05, 0.99, 0.70]],
+    [ 0.70, [1.02, 0.93, 0.56]],
+    [ 1.00, [0.98, 0.87, 0.46]],   // 天顶赭黄
+  ],
+  real: [
+    [-1.00, [0.94, 0.90, 0.78]],
+    [ 0.00, [1.07, 1.03, 0.94]],
+    [ 0.18, [1.06, 1.00, 0.82]],
+    [ 0.38, [1.04, 0.96, 0.64]],
+    [ 0.70, [1.00, 0.88, 0.48]],
+    [ 1.00, [0.94, 0.80, 0.38]],
+  ],
+};
+function makeSkyDome(style) {
+  const R = 300;
+  const g = new THREE.SphereGeometry(R, 32, 20);
+  const pos = g.getAttribute('position');
+  const colors = new Float32Array(pos.count * 3);
+  const stops = SKY_GRADIENT[style] || SKY_GRADIENT.paper;
+  for (let i = 0; i < pos.count; i++) {
+    const h = Math.max(-1, Math.min(1, pos.getY(i) / R));
+    let k = 0;
+    while (k < stops.length - 2 && h > stops[k + 1][0]) k++;
+    const [h0, c0] = stops[k], [h1, c1] = stops[k + 1];
+    const t = Math.max(0, Math.min(1, (h - h0) / (h1 - h0)));
+    colors[i * 3] = c0[0] + (c1[0] - c0[0]) * t;
+    colors[i * 3 + 1] = c0[1] + (c1[1] - c0[1]) * t;
+    colors[i * 3 + 2] = c0[2] + (c1[2] - c0[2]) * t;
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  const mesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({
+    vertexColors: true, side: THREE.BackSide, fog: false,
+    depthWrite: false, toneMapped: false,
+  }));
+  mesh.name = 'atmos.skyDome';
+  mesh.renderOrder = -1000;      // 先铺天色、不写深度，其余物件照常覆盖
+  mesh.frustumCulled = false;    // 恒跟随相机，必在视锥内
+  return mesh;
+}
+function makeSunGlow() {
+  const size = 128;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = size;
+  const ctx = cv.getContext('2d');
+  const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  // 峰值压低、能量摊到更宽的外圈：加法混合一旦中心冲到 1.0 就会变成
+  // 一枚硬白圆片，参考图要的是弥散的暮霭光晕而不是太阳圆盘。
+  g.addColorStop(0.00, 'rgba(255,240,210,0.42)');
+  g.addColorStop(0.10, 'rgba(255,228,180,0.30)');
+  g.addColorStop(0.36, 'rgba(255,210,152,0.12)');
+  g.addColorStop(0.72, 'rgba(255,198,132,0.03)');
+  g.addColorStop(1.00, 'rgba(255,192,124,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, size, size);
+  const map = new THREE.CanvasTexture(cv);
+  map.colorSpace = THREE.SRGBColorSpace;
+  // depthTest 保留：天空像素深度为 1 故能通过，被地形挡住的部分自然剔除。
+  // 加法混合在 ACES 下极易过曝，这里 toneMapped:false + 低 opacity 双保险。
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+    map, transparent: true, blending: THREE.AdditiveBlending,
+    depthWrite: false, depthTest: true, fog: false, toneMapped: false,
+    opacity: 0.48,
+  }));
+  sp.name = 'atmos.sunGlow';
+  sp.scale.set(190, 190, 1);
+  sp.renderOrder = -500;
+  return sp;
+}
+
 // ── 主场景 ──────────────────────────────────────────────────
-export function createWorld(container, state, { onPick, quality = 'high', reducedMotion = false, ink = false, tex = false, ctex = false, units = true, capitals = true, trees = true, terrain = 'classic', mat = true } = {}) {
+export function createWorld(container, state, { onPick, quality = 'high', reducedMotion = false, ink = false, atmos = false, tex = false, ctex = false, units = true, capitals = true, trees = true, terrain = 'classic', mat = true } = {}) {
   // 地貌档必须先绑定再生成任何几何：全场景的贴地落点都由 heightAt() 分派。
   const low = quality === 'low';            // 低配：DPR 封顶、关阴影、植被采样减半
   let terrainStyle = setTerrainStyle(TERRAIN_STYLES.includes(terrain) ? terrain : 'classic');
@@ -538,17 +619,28 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
   // 光：暖阳主光 + 天光 + 冷色补光。写实档略压环境光、抬高主光增强坡面立体感，
   // 但不可大幅压暗——实机 A/B 时压到 1.05/0.17 让整幅画面暗了 12 个色阶。
   const dramatic = terrainStyle === 'real';
+  const atmosOn = !!atmos;
   // 斜射自投影会吃掉约 10 个色阶，补一份天光把阴影填回来：
   // 这是模拟真实天空散射，不是抹掉立体感（局部明暗差仍在）。
   const skyFill = hd ? 0.20 : 0;
+  // 大气透视档只重排「颜色」与太阳仰角，不改光强结构：
+  // 暖主光 + 冷色天光／补光，阴影区于是带蓝紫，迎光面转赭黄。
+  // 关掉时下面每个值逐字回到旧配置，A/B 可逐像素对照。
   // 保留引用：开场页场景主题会临时改天光并精确还原，不能每次重新 new 一个灯
-  const hemi = new THREE.HemisphereLight(0xfff5dd, 0x6e725f, (dramatic ? 1.28 : 1.35) + skyFill);
+  const hemi = new THREE.HemisphereLight(
+    atmosOn ? 0xffe8c4 : 0xfff5dd,
+    atmosOn ? 0x707a8c : 0x6e725f,
+    (dramatic ? 1.28 : 1.35) + skyFill);
   const ambient = new THREE.AmbientLight(0xffffff, (dramatic ? 0.24 : 0.26) + skyFill * 0.5);
   scene.add(hemi, ambient);
-  const sun = new THREE.DirectionalLight(0xfff0d0, dramatic ? 2.50 : 2.25);
+  const sun = new THREE.DirectionalLight(
+    atmosOn ? 0xffd8a0 : 0xfff0d0,
+    atmosOn ? (dramatic ? 2.38 : 2.18) : (dramatic ? 2.50 : 2.25));
   // 高清档把太阳压低到约 38°：斜射光让山脊自投影拉长，沟壑才有体积。
-  // 原味档保持 88 高度，避免改动既有城池投影与整体观感。
-  sun.position.set(hd ? -56 : -42, hd ? 62 : 88, hd ? 46 : 48);
+  // 大气透视档再压到约 20°，长坡影是「暮色」的主要来源；原味档保持 88 高度。
+  // 日晕与灯光共用这一方向，辉光不会和影子打架。
+  if (atmosOn) sun.position.set(-16, 34, 92);
+  else sun.position.set(hd ? -56 : -42, hd ? 62 : 88, hd ? 46 : 48);
   sun.castShadow = !low;
   const shadowSize = low ? 512 : 1536;
   sun.shadow.mapSize.set(shadowSize, shadowSize);
@@ -558,9 +650,24 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
   sun.shadow.bias = -0.0005;
   sun.shadow.normalBias = 0.03;
   scene.add(sun);
-  const fill = new THREE.DirectionalLight(0xc6d8e8, 0.52);
+  const fill = new THREE.DirectionalLight(
+    atmosOn ? 0xbcd2ea : 0xc6d8e8,
+    atmosOn ? 0.62 : 0.52);
   fill.position.set(55, 40, -60);
   scene.add(fill);
+
+  // 天穹与日晕：只在 atmos 档建，默认关时场景对象与 draw call 逐项不变。
+  // 两者都跟随相机平移（不跟随旋转），地平线因此始终贴着世界 Y=0，
+  // 不会出现「天空跟着镜头一起转」的假像。
+  let skyDome = null, sunGlow = null;
+  const sunDir = new THREE.Vector3();
+  const syncSkyTint = () => { if (skyDome) skyDome.material.color.copy(scene.background); };
+  if (atmosOn) {
+    skyDome = makeSkyDome(terrainStyle === 'real' ? 'real' : 'paper');
+    sunGlow = makeSunGlow();
+    syncSkyTint();
+    scene.add(skyDome, sunGlow);
+  }
 
   // ── 开场页表现层 ──
   // 三项都是「视觉只读」：不改 GameState、不进存档、不参与 supplyMap 等规则计算。
@@ -1655,6 +1762,7 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
     hemi.intensity = s.hemiIntensity; ambient.intensity = s.ambientIntensity;
     fill.color.setHex(s.fillColor); fill.intensity = s.fillIntensity;
     renderer.toneMappingExposure = s.exposure;
+    syncSkyTint();
   }
   /** 每次先从原始快照还原再叠加，故连续切主题幂等；light 缺省字段沿用当前档默认值。 */
   function applyTheme(theme) {
@@ -1677,6 +1785,7 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
     if (L.hemi) { hemi.color.setHex(L.hemi[0]); hemi.groundColor.setHex(L.hemi[1]); }
     ambient.intensity = baseAmbientIntensity * (L.ambientMul ?? 1);
     if (L.exposure !== undefined) renderer.toneMappingExposure = L.exposure;
+    syncSkyTint();
   }
   function clearTheme() {
     if (themeSnapshot) restoreTheme(themeSnapshot);
@@ -1702,6 +1811,11 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
     elapsed += animDt;
     uTime.value = elapsed;
     controls.update();
+    if (skyDome) {
+      skyDome.position.copy(camera.position);
+      sunGlow.position.copy(camera.position)
+        .addScaledVector(sunDir.copy(sun.position).normalize(), 260);
+    }
 
     if (camTween) {
       camTween.t = Math.min(1, camTween.t + dt * camTween.speed);
@@ -1830,7 +1944,8 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
         rider: !!unitGeos?.Rider, siege: !!unitGeos?.Siege,
         siegeInstances: siegeMesh ? siegeMesh.count : 0,
         tex, cityTex, cityMap: !!matSolid.map, factionMap: !!factionMat.map,
-        mat: matOn, contactInk: contactInk.visible, contactOpacity: contactInk.material.opacity,
+        mat: matOn, atmos: atmosOn, skyDome: !!skyDome, sunGlow: !!sunGlow,
+        contactInk: contactInk.visible, contactOpacity: contactInk.material.opacity,
         groundShadows: groundShadowCount,
         terrain: terrainStyle, hdSegX: hd ? HD_SEG_X : SEG_X, hdSegZ: hd ? HD_SEG_Z : SEG_Z,
         trees: useTrees, treeLoaded: !!treeGeos, treeKinds: Object.keys(treeGeos || {}),

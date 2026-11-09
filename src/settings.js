@@ -64,7 +64,7 @@ const legacy = {
 export const SETTING_GROUPS = [
   {
     id: 'visual', title: '观感与资产',
-    note: '默认保留清透的宣纸底色、高清树木与材质质感；地貌档、宣纸增强、贴图与开场页电影感均为可选项，互不干扰。',
+    note: '默认保留清透的宣纸底色、高清树木与材质质感；地貌档、大气透视、宣纸增强、贴图与开场页电影感均为可选项，互不干扰。',
     items: [
       {
         id: 'terrain', label: '地貌精度', type: 'select', default: 'paper', effect: 'reload',
@@ -95,6 +95,12 @@ export const SETTING_GROUPS = [
         desc: '墨晕、描边、纸纹与色调曲线。实机 A/B 后默认关闭，保留清透观感。',
         decode: p => (p.has('ink') ? p.get('ink') === '1' : undefined),
         encode: v => ({ ink: v ? '1' : null }),
+      },
+      {
+        id: 'atmos', label: '大气透视 · 暮色', type: 'toggle', default: false, effect: 'reload',
+        desc: '顶点色渐变天穹替代单色背景，太阳方向添一层极淡辉光；暖主光配冷色天光，把坡面分出迎光与背光。不改 shader、不启全屏后处理，仅增 1~2 个 draw call。低角度仰视最为明显，建议与「宣纸增强」二选一；默认关闭以保留清透观感。',
+        decode: p => (p.has('atmos') ? p.get('atmos') === '1' : undefined),
+        encode: v => ({ atmos: v ? '1' : null }),
       },
       {
         id: 'grade', label: '开场页电影感', type: 'toggle', default: true, effect: 'live',
@@ -339,6 +345,7 @@ export function derive(values, env = {}) {
     reducedMotion: values.motion === 'on' ? false
       : values.motion === 'off' ? true : !!env.systemReducedMotion,
     ink: !!values.ink,
+    atmos: !!values.atmos,
     economy: !!values.economy,
     grade: values.grade !== false,
     mat: !!values.mat,
