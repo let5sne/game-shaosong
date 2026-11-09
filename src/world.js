@@ -7,7 +7,7 @@ import {
   SONG_COLOR, JIN_COLOR, SONG_LIGHT, JIN_LIGHT, PAPER,
   cityTier, buildCityLibrary, makeFlagTexture, makeWaterTexture,
   makeLabelTexture, drawLabel, makeFlagMaterial,
-  pineGeometry, broadGeometry, rockGeometry, tentGeometry, mountainClusterGeometry, boulderGeometry,
+  pineGeometry, broadGeometry, rockGeometry, tentGeometry, mountainClusterGeometry, boulderGeometry, fieldGeometry,
   loadUnitLibrary, loadCapitalLibrary, loadTreeLibrary, TREE_MESHES, applyVerticalAO,
 } from './models.js';
 import { HOME_POSE } from './themes.js';
@@ -57,7 +57,7 @@ const RIVER_SAMPLES = RIVERS.map(r => {
   return { def: r, curve, pts, minX, maxX, minZ, maxZ };
 });
 
-function riverProximity(x, z) {
+export function riverProximity(x, z) {
   let best = 10.24;                       // 3.2²，超出即无需精确值
   for (const r of RIVER_SAMPLES) {
     if (x < r.minX - 3.2 || x > r.maxX + 3.2 || z < r.minZ - 3.2 || z > r.maxZ + 3.2) continue;
@@ -774,10 +774,103 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
   const fordBodyMesh = new THREE.Mesh(mergeAll(fordBody), roadMat(0.94));
   fordBodyMesh.renderOrder = 6; scene.add(fordBodyMesh);
 
+  const dummy = new THREE.Object3D();
+
+  // ── 耕地：城郊平畴的条播田块 ──
+  // 富庶之州田亩更多；只落在城台 5 以外的缓坡上，不压官道、不泡河水，
+  // 簇内同向排布（田长边垂直于进城半径），读作「有人烟的田」而非随机贴片。
+  // 全图一个 InstancedMesh，+1 draw call。
+  {
+    const roadSegs = [], seenRoad = new Set();
+    for (const c of CITY_DEFS) for (const id of c.links) {
+      const key = [c.id, id].sort().join('|');
+      if (seenRoad.has(key)) continue;
+      seenRoad.add(key);
+      const t = CITY_DEFS.find(x => x.id === id);
+      if (t) roadSegs.push([c.x, c.z, t.x, t.z]);
+    }
+    const segDist = (px, pz, [x0, z0, x1, z1]) => {
+      const dx = x1 - x0, dz = z1 - z0, L2 = dx * dx + dz * dz;
+      const t = L2 ? Math.max(0, Math.min(1, ((px - x0) * dx + (pz - z0) * dz) / L2)) : 0;
+      return Math.hypot(px - (x0 + dx * t), pz - (z0 + dz * t));
+    };
+    const beds = [];
+    for (const c of CITY_DEFS) {
+      const n = c.yieldGrain >= 7 ? 8 : c.yieldGrain >= 5 ? 6 : 4;
+      const baseAng = hash(c.x * 1.1, c.z * 0.9) * Math.PI * 2;
+      for (let i = 0; i < n; i++) {
+        const r = 4.9 + hash(c.x + i * 3.7, c.z - i * 2.9) * 2.3;
+        const a = baseAng + (hash(c.z + i * 5.1, c.x + i * 1.3) - 0.5) * 1.9;
+        const px = c.x + Math.cos(a) * r, pz = c.z + Math.sin(a) * r;
+        if (px < -55 || px > 36 || pz < -46 || pz > 42) continue;
+        // 河谷平地正是田所在：只避开水线（rd>2.0），官道留半幅余量
+        if (cityDistance(px, pz) < 4.4 || riverProximity(px, pz) < 2.0) continue;
+        if (roadSegs.some(s => segDist(px, pz, s) < 0.60)) continue;
+        const scale = 1.5 + hash(px, pz) * 0.9;
+        const hx = 0.55 * scale, hz = 0.38 * scale;
+        const corners = [
+          heightAt(px - hx, pz - hz), heightAt(px + hx, pz - hz),
+          heightAt(px - hx, pz + hz), heightAt(px + hx, pz + hz),
+        ];
+        if (corners[0] < 0.55 || Math.max(...corners) - Math.min(...corners) > 0.60) continue;
+        // 顺坡倾斜：田面跟着地形走，缓坡上读作梯田而不是切进地里的平板
+        const slX = (corners[1] + corners[3] - corners[0] - corners[2]) / (4 * hx);
+        const slZ = (corners[2] + corners[3] - corners[0] - corners[1]) / (4 * hz);
+        beds.push({
+          x: px, y: (corners[0] + corners[1] + corners[2] + corners[3]) / 4 + 0.02, z: pz,
+          scale, rot: -a - Math.PI / 2, tiltX: -Math.atan(slZ), tiltZ: -Math.atan(slX),
+          t: hash(px * 1.3, pz * 0.7),
+        });
+      }
+    }
+    // 洛阳盆地手工点位：通用散布的随机角度拾不到的城东平缓地
+    //（Node 采样坡度 + 避开蕃帐圈与河道确定；长局同享这份地图装点）
+    for (const [px, pz] of [
+      [-16.7, -12.1], [-16.3, -12.0], [-16.0, -11.9], [-18.3, -10.1],
+      [-19.1, -9.7], [-20.0, -9.6], [-20.0, -9.2], [-20.9, -9.7],
+    ]) {
+      if (roadSegs.some(s => segDist(px, pz, s) < 0.60)) continue;   // 手工位也须让开官道
+      const scale = 1.5 + hash(px, pz) * 0.9;
+      const hx = 0.55 * scale, hz = 0.38 * scale;
+      const corners = [
+        heightAt(px - hx, pz - hz), heightAt(px + hx, pz - hz),
+        heightAt(px - hx, pz + hz), heightAt(px + hx, pz + hz),
+      ];
+      if (Math.max(...corners) - Math.min(...corners) > 0.60) continue;
+      const slX = (corners[1] + corners[3] - corners[0] - corners[2]) / (4 * hx);
+      const slZ = (corners[2] + corners[3] - corners[0] - corners[1]) / (4 * hz);
+      const a = Math.atan2(pz + 13, px + 20);
+      beds.push({
+        x: px, y: (corners[0] + corners[1] + corners[2] + corners[3]) / 4 + 0.02, z: pz,
+        scale, rot: -a - Math.PI / 2, tiltX: -Math.atan(slZ), tiltZ: -Math.atan(slX),
+        t: hash(px * 1.3, pz * 0.7),
+      });
+    }
+    const fieldMat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1 });
+    const fieldIm = new THREE.InstancedMesh(fieldGeometry(), fieldMat, Math.max(1, beds.length));
+    const tStraw = new THREE.Color(0xefe7cf), tGreen = new THREE.Color(0xd7e0b4), tint = new THREE.Color();
+    beds.forEach((p, i) => {
+      dummy.rotation.order = 'YXZ';                  // 先偏航后俯仰：倾斜沿田块局部轴
+      dummy.position.set(p.x, p.y, p.z);
+      dummy.rotation.set(p.tiltX, p.rot, p.tiltZ);
+      dummy.scale.set(p.scale, 1, p.scale * 0.9 + 0.1);
+      dummy.updateMatrix();
+      fieldIm.setMatrixAt(i, dummy.matrix);
+      fieldIm.setColorAt(i, tint.copy(tStraw).lerp(tGreen, p.t * 0.6));
+    });
+    dummy.rotation.order = 'XYZ';                    // 共享 dummy 复位，别污染后续散布
+    fieldIm.instanceMatrix.needsUpdate = true;
+    if (fieldIm.instanceColor) fieldIm.instanceColor.needsUpdate = true;
+    fieldIm.count = beds.length;
+    fieldIm.frustumCulled = false;
+    fieldIm.name = 'farmland';
+    fieldIm.receiveShadow = true;
+    scene.add(fieldIm);
+  }
+
   // ── 远山 ──
   // classic：12 个低多边形锥柱剪影（原味）。
   // 高清档：3 层环形连续山脊，任意视角都有远近层次与大气透视。
-  const dummy = new THREE.Object3D();
   if (hd) {
     for (const spec of HD_RIDGES[terrainStyle]) {
       scene.add(ridgeRing(spec));

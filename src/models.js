@@ -381,6 +381,27 @@ export function buildCityGeometry(tierIdx, withAtlas = false, withAO = false) {
   house(half * 0.58, -half * 0.58, 0.75);
   if (tierIdx > 0) house(-half * 0.60, half * 0.52, 0.70);
 
+  // ⑦ 城外关厢：门外沿道两户人家 + 半围土墙，是「有人烟」的第一眼。
+  // 落点压在城台平台半径 2.6 以内（域内纯平、与城基同高），不会浮空；
+  // 大城墙线外推，关厢随 tier 内收贴紧门道。
+  {
+    const zOff = tierIdx === 0 ? 0.72 : tierIdx === 1 ? 0.62 : 0.52;
+    const sub = (hx, hz, s) => {
+      A.push(box(0.50 * s, 0.30 * s, 0.42 * s, hx, 0.15 * s, hz, C.stone));
+      addRoof(spireRoof(0.66 * s, 0.34 * s, hx, 0.30 * s, hz, C.roof));
+    };
+    sub(-0.88, half + zOff, 0.72);
+    sub(0.85, half + zOff + 0.18, 0.60);
+    // 半围土墙：迎门留出沿道，避开门前踏道（止于 half+0.38）
+    A.push(box(1.02, 0.14, 0.05, -0.42, 0.07, half + zOff - 0.30, C.wallDk));
+    A.push(box(0.78, 0.14, 0.05, 0.47, 0.07, half + zOff - 0.38, C.wallDk));
+    // 一口井：石栏 + 木架 + 小顶，关厢人家共用的水源
+    A.push(cyl(0.13, 0.14, 0.12, 0.52, 0.06, half + zOff + 0.02, C.stone, 8));
+    for (const sx of [-1, 1]) A.push(box(0.035, 0.26, 0.035, 0.52 + sx * 0.13, 0.25, half + zOff + 0.02, C.wood));
+    A.push(box(0.34, 0.045, 0.045, 0.52, 0.37, half + zOff + 0.02, C.wood));
+    addRoof(spireRoof(0.30, 0.12, 0.52, 0.38, half + zOff + 0.02, C.roof));
+  }
+
   // ⑥ 旗杆、枪尖、缨穗（旗面独立动态）
   const px = half * 0.92, pz = half * 0.92;
   const poleBase = wallTop - 0.10;
@@ -645,6 +666,39 @@ export function tentGeometry() {
   a.push(cone(0.42, 0.62, 0, 0.41, 0, 0xffffff, 6));
   a.push(cone(0.07, 0.22, 0, 0.80, 0, 0xc9a763, 4));
   return merge(a);
+}
+
+/**
+ * 耕地条播床：8 段田面，垄脊按 sin 抬升、垄沟压低并交替明暗，
+ * 四周一圈深色田埂把田从地面里「框」出来（宣纸设色里田块的读法靠边线）。
+ * 长边为局部 x 轴，实例绕 y 旋转让簇内同向。
+ */
+export function fieldGeometry() {
+  const parts = [];
+  const bed = new THREE.PlaneGeometry(1, 0.66, 8, 1);
+  bed.rotateX(-Math.PI / 2);
+  const pos = bed.attributes.position;
+  const base = new THREE.Color(0xc4a257);
+  const col = new Float32Array(pos.count * 3);
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const ridge = Math.pow(Math.abs(Math.sin(x * Math.PI * 8)), 0.65);   // 4 条垄
+    pos.setY(i, 0.03 + ridge * 0.07);
+    const k = 0.80 + ridge * 0.34;                                       // 垄亮沟暗
+    col[i * 3] = base.r * k; col[i * 3 + 1] = base.g * k; col[i * 3 + 2] = base.b * k;
+  }
+  pos.needsUpdate = true;
+  bed.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  bed.computeVertexNormals();
+  parts.push(bed);
+  const edge = 0x937c4e;                                                 // 田埂
+  const bw = 0.05, bh = 0.11;
+  parts.push(box(1.0 + bw * 2, bh, bw, 0, bh / 2, 0.33 + bw / 2, edge));
+  parts.push(box(1.0 + bw * 2, bh, bw, 0, bh / 2, -0.33 - bw / 2, edge));
+  parts.push(box(bw, bh, 0.66 + bw * 2, -0.5 - bw / 2, bh / 2, 0, edge));
+  parts.push(box(bw, bh, 0.66 + bw * 2, 0.5 + bw / 2, bh / 2, 0, edge));
+  const g = merge(parts);
+  return g;
 }
 
 /** 远山：一簇低多边形山峰，用 InstancedMesh 沿边界摆放，由雾融进纸面 */
