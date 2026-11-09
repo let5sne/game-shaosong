@@ -287,6 +287,15 @@ export function terrainColorHD(h, x, z, nx, ny, nz, style,
   // 背光坡压暗（太阳在 -x/+z 方向），让沟壑自己显形
   const back = Math.max(0, -(nx * -0.62 + nz * 0.78));
   _c.lerp(_tmp.setHex(HD_SHADE[style]), back * (style === 'real' ? 0.34 : 0.18));
+  // 皴法：迎光坡（向阳）偏暖、背光坡偏冷。只转色相与微量饱和、不动明度，
+  // 故整幅平均明度逐点不变，宣纸底色不脏（与 AO 同纪律）。
+  // 暖 = 减色相（橄榄绿 → 橙），冷 = 加色相（→ 青绿）。
+  // 冷侧系数远大于暖侧：既有背光压暗（lerp 到 HD_SHADE）本身已把背坡拉暖约 10°，
+  // 冷偏移必须先抵消它，才读得出「阴坡泛青」。
+  const front = Math.max(0, nx * -0.62 + nz * 0.78);
+  const warm = style === 'real' ? 0.020 : 0.016;
+  const cool = style === 'real' ? 0.112 : 0.105;
+  _c.offsetHSL(back * cool - front * warm, front * 0.026, 0);
   // 谷底湿润深绿，只作用在低海拔缓坡
   if (h < 3.0 && Math.abs(ny) > 0.86) {
     _c.lerp(_tmp.setHex(HD_SHADE[style]), ramp(3.0, 0.7, h) * (style === 'real' ? 0.16 : 0.08));
@@ -1053,10 +1062,13 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
   const flagTex = {
     song: makeFlagTexture(true, '宋', qh ? '清河' : '建炎'),
     jin: makeFlagTexture(false, foeChar, qh ? '蕃部' : '天会'),
+    // 小队旗：靛青底白「械」字，只挂在队长坐镇之城（清河关专属），与普通宋帜一眼可辨
+    squad: qh ? makeFlagTexture(true, '械', '清河小队', { base: '#2e4a68', gold: '#c8d4e4', ink: '#eef2f8' }) : null,
   };
   const flagMats = {
     song: makeFlagMaterial(flagTex.song, uTime, FLAG_W),
     jin: makeFlagMaterial(flagTex.jin, uTime, FLAG_W),
+    squad: qh ? makeFlagMaterial(flagTex.squad, uTime, FLAG_W) : null,
   };
   const flagGeo = new THREE.PlaneGeometry(FLAG_W, FLAG_H, 14, 6);
   const matSolid = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, metalness: 0.02 });
@@ -1104,10 +1116,14 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
   const flagBatches = {
     song: new THREE.InstancedMesh(flagGeo, flagMats.song, CITY_DEFS.length),
     jin: new THREE.InstancedMesh(flagGeo, flagMats.jin, CITY_DEFS.length),
+    // 小队旗至多一面（队长坐镇处），清河关才建批次
+    squad: qh ? new THREE.InstancedMesh(flagGeo, flagMats.squad, 1) : null,
   };
-  for (const k of ['song', 'jin']) {
+  for (const k of ['song', 'jin', 'squad']) {
+    if (!flagBatches[k]) continue;
     flagBatches[k].renderOrder = 9;
     flagBatches[k].frustumCulled = false;
+    flagBatches[k].name = `flag:${k}`;   // 便于实机验证统计（小队旗只在清河关存在）
     scene.add(flagBatches[k]);
   }
   const CITY_COLORS = { song: new THREE.Color(SONG_COLOR), jin: new THREE.Color(JIN_COLOR) };
@@ -1253,6 +1269,8 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
       let n = 0;
       for (const def of CITY_DEFS) {
         if (s.cities[def.id].owner !== k) continue;
+        // 清河关：队长坐镇之城改挂小队旗（从宋帜批次里摘出）
+        if (qh && k === 'song' && def.id === s.heroCity) continue;
         const p = citySlot[def.id];
         dummy.position.set(p.x + p.flagPos[0], p.y + p.flagPos[1], p.z + p.flagPos[2]);
         dummy.rotation.set(0, 0, 0);
@@ -1261,6 +1279,21 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
         im.setMatrixAt(n++, dummy.matrix);
       }
       im.count = n;                 // 紧凑排列，不再提交零缩放的退化三角形
+      im.instanceMatrix.needsUpdate = true;
+    }
+    // 小队旗跟随坐镇（坐镇令变化时 update() 会重跑本函数）
+    if (qh && flagBatches.squad) {
+      const im = flagBatches.squad;
+      let n = 0;
+      if (s.heroCity && s.cities[s.heroCity]?.owner === 'song') {
+        const p = citySlot[s.heroCity];
+        dummy.position.set(p.x + p.flagPos[0], p.y + p.flagPos[1], p.z + p.flagPos[2]);
+        dummy.rotation.set(0, 0, 0);
+        dummy.scale.setScalar(1);
+        dummy.updateMatrix();
+        im.setMatrixAt(n++, dummy.matrix);
+      }
+      im.count = n;
       im.instanceMatrix.needsUpdate = true;
     }
     for (const b of factionBatches) {

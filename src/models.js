@@ -460,12 +460,12 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
-/** 牙边军旗：布纹、金线、大字、三角牙边。big/era 可覆写阵营字与年款（清河关用「蕃／蕃部」「清河」） */
-export function makeFlagTexture(song, big, era) {
+/** 牙边军旗：布纹、金线、大字、三角牙边。big/era 可覆写阵营字与年款（清河关用「蕃／蕃部」「清河」），palette 可整换配色（小队旗） */
+export function makeFlagTexture(song, big, era, palette) {
   const cv = canvas(384, 240);
   const ctx = cv.getContext('2d');
-  const base = song ? '#a8392f' : '#2f3d51';
-  const gold = song ? '#e8c98a' : '#c2c4ae';
+  const base = palette?.base || (song ? '#a8392f' : '#2f3d51');
+  const gold = palette?.gold || (song ? '#e8c98a' : '#c2c4ae');
   ctx.fillStyle = base;
   ctx.fillRect(0, 0, 384, 240);
   // 布纹
@@ -485,7 +485,7 @@ export function makeFlagTexture(song, big, era) {
   ctx.strokeRect(26, 26, 332, 188);
   ctx.globalAlpha = 1;
   // 大字
-  ctx.fillStyle = song ? '#f7e9c8' : '#e9e6d4';
+  ctx.fillStyle = palette?.ink || (song ? '#f7e9c8' : '#e9e6d4');
   ctx.font = 'bold 132px "Songti SC","STSong","SimSun",serif';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText(big || (song ? '宋' : '金'), 176, 118);
