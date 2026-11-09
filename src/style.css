@@ -449,7 +449,7 @@ button:disabled { cursor: not-allowed; }
 }
 .intro-map-hint i { width: 42px; height: 1px; background: rgba(226,194,130,.45); }
 .intro-deco { font-family: var(--serif); font-size: 11px; letter-spacing: 5px; color: var(--gold-lt); opacity: .85; }
-.intro-title { font-family: var(--serif); font-size: clamp(54px, 6vw, 92px); font-weight: 700; letter-spacing: 12px; line-height: 1.12; margin: 6px 0 0; text-shadow: 0 6px 30px rgba(0,0,0,.55); }
+.intro-title { font-family: var(--serif); font-size: clamp(46px, 4.8vw, 70px); font-weight: 700; letter-spacing: 8px; line-height: 1.12; margin: 6px 0 0; text-shadow: 0 6px 30px rgba(0,0,0,.55); white-space: nowrap; }
 .intro-title span { color: #c4503c; text-shadow: 0 0 34px rgba(196,80,60,.45); }
 .intro-sub { font-family: var(--serif); font-size: 16px; letter-spacing: 6px; color: var(--gold-lt); margin: 2px 0 16px; }
 .intro-desc { font-size: 12.5px; line-height: 1.95; color: #cfc3a9; margin: 0 0 18px; }
@@ -912,7 +912,7 @@ kbd { font-family: var(--sans); font-size: 10px; padding: 1px 5px; border: 1px s
 /* ── 场景选择页的响应式：中等屏收紧字距，窄屏单列并露出顶部舆图 ── */
 @media (max-width: 1180px) {
   .intro-inner { grid-template-columns: minmax(280px, 360px) minmax(30px, 1fr) minmax(240px, 290px); gap: 16px; }
-  .intro-title { font-size: clamp(48px, 6.5vw, 74px); letter-spacing: 8px; }
+  .intro-title { font-size: clamp(40px, 4.8vw, 58px); letter-spacing: 6px; }
   .intro-points { display: none; }
   .sd-poem { font-size: 22px; }
 }
