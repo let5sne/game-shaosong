@@ -148,7 +148,8 @@ if (check) {
     hard:   { lo: 0.05, hi: 0.45, minTurn: 18 },
   };
   const SCENARIO_EXPECT = {
-    qinghe:   { lo: 0.60, hi: 0.97, minTurn: 4 },
+    // 清河主胜法是「婴寨不堕」（守满九轮，终局记在时限后的第 10 回合），故回合上界放到 10
+    qinghe:   { lo: 0.60, hi: 0.97, minTurn: 4, maxTurn: 10 },
     shunchang: { lo: 0.55, hi: 0.95, minTurn: 4 },
     yancheng:  { lo: 0.30, hi: 0.75, minTurn: 5 },
   };
@@ -168,8 +169,8 @@ if (check) {
     const e = SCENARIO_EXPECT[sc.id], r = summary[sc.id];
     if (!e || !r) continue;
     const okRate = r.rate >= e.lo && r.rate <= e.hi;
-    const okTurn = r.avgWinTurn >= e.minTurn && r.avgWinTurn <= sc.maxTurns;
-    console.log(`${okRate && okTurn ? '通过' : '未过'}  ${sc.name}  胜率 ${(r.rate * 100).toFixed(1)}% (期望 ${(e.lo * 100).toFixed(0)}~${(e.hi * 100).toFixed(0)}%)  平均胜局 ${r.avgWinTurn} 回合 (${e.minTurn}~${sc.maxTurns})`);
+    const okTurn = r.avgWinTurn >= e.minTurn && r.avgWinTurn <= (e.maxTurn ?? sc.maxTurns);
+    console.log(`${okRate && okTurn ? '通过' : '未过'}  ${sc.name}  胜率 ${(r.rate * 100).toFixed(1)}% (期望 ${(e.lo * 100).toFixed(0)}~${(e.hi * 100).toFixed(0)}%)  平均胜局 ${r.avgWinTurn} 回合 (${e.minTurn}~${e.maxTurn ?? sc.maxTurns})`);
     if (!okRate || !okTurn) failed++;
   }
   // 经营行为断言：胜率只能证明「能赢」，还要证明这条玩法链路真的通了——

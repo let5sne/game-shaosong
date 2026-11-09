@@ -338,12 +338,16 @@ export function chooseAction(s, ctx = newTurnContext(s)) {
   // 二、都督驻节：战法在本城加倍，只费一道政令，是本局性价比最高的一步
   if (!s.heroCity && s.hero && s.decree >= 2) {
     const city = bestStation(s, opts);
-    if (city) return { type: 'dujun', city, desc: `都督持节驻${s.cities[city].name}，本路战法加倍、城守益固` };
+    if (city) return { type: 'dujun', city, desc: s.scenarioId === 'qinghe'
+      ? `${s.hero.name}坐镇${s.cities[city].name}，本城战法加倍、城守益固`
+      : `都督持节驻${s.cities[city].name}，本路战法加倍、城守益固` };
   }
   // 二之二、分帅持节：与主帅分镇，补最吃紧的一处防线
   if (s.viceHero && !s.viceHeroCity && s.decree >= 2) {
     const city = bestViceStation(s);
-    if (city) return { type: 'dujun', city, route: 'vice', desc: `分帅${s.viceHero.name}持节驻${s.cities[city].name}，专当一面` };
+    if (city) return { type: 'dujun', city, route: 'vice', desc: s.scenarioId === 'qinghe'
+      ? `${s.viceHero.name}领组坐镇${s.cities[city].name}，专当一面`
+      : `分帅${s.viceHero.name}持节驻${s.cities[city].name}，专当一面` };
   }
 
   // 三、粮为军命：进军需粮甚巨，先立仓廪
@@ -352,12 +356,12 @@ export function chooseAction(s, ctx = newTurnContext(s)) {
   }
   // 四、民心既关粮赋，亦系败亡
   if (s.popularity < 38 && s.grain >= 15 && s.decree >= 2) {
-    return { type: 'anfu', desc: `民心浮动，减免两浙赋役以固根本` };
+    return { type: 'anfu', desc: s.scenarioId === 'qinghe' ? '民心浮动，开棚抚恤乡民以固寨心' : '民心浮动，减免两浙赋役以固根本' };
   }
 
   // 五、有必胜之战而未亲征，先树黄旗：本回合攻势再 +25%
   if ((ready || (best && best.ratio >= 0.95)) && s.canQinzheng && s.decree >= 3) {
-    return { type: 'qinzheng', desc: `御驾亲征，本回合诸军攻势 +25%` };
+    return { type: 'qinzheng', desc: s.scenarioId === 'qinghe' ? '全员压上，本回合攻势 +25%' : '御驾亲征，本回合诸军攻势 +25%' };
   }
 
   // 六、攻城
@@ -389,7 +393,7 @@ export function chooseAction(s, ctx = newTurnContext(s)) {
   if (!isWindowSeason(s) || !best) {
     const weak = weakestFront(s);
     if (weak && weak.troops < 10 && canTrain(s, weak, ctx) && s.decree >= 2) {
-      return { type: 'zhengjun', city: weak.id, desc: `${weak.name}当金骑之冲，增兵固守` };
+      return { type: 'zhengjun', city: weak.id, desc: `${weak.name}当${s.scenarioId === 'qinghe' ? '蕃骑' : '金骑'}之冲，增兵固守` };
     }
     const rf = weak && weak.troops < 7 && s.decree >= 2 ? reinforceOption(s, weak.id) : null;
     if (rf) {
@@ -409,7 +413,7 @@ export function chooseAction(s, ctx = newTurnContext(s)) {
 
   // 九、余政令尽作积贮：粮、民心、兵额，按紧缺程度取一
   if (s.decree >= 1) {
-    if (s.grain < 150) return { type: 'chouliang', desc: `积谷以备北伐` };
+    if (s.grain < 150) return { type: 'chouliang', desc: s.scenarioId === 'qinghe' ? '积粮备守，以待蕃骑' : '积谷以备北伐' };
     if (s.popularity < 62 && s.grain >= 15) return { type: 'anfu', desc: `存问生民，以固粮赋` };
     const trainable = (s.frontCities.length ? s.frontCities : s.songCities)
       .filter(c => canTrain(s, c, ctx))
@@ -448,6 +452,16 @@ export function chooseEvent(s) {
     shunchang_zaozhou: () => 0,
     shunchang_yezhuo: () => (s.grain < 45 || s.cities.shouchun.troops < 7) ? 1 : 0,
     yancheng_guazima: () => (s.grain < 40 ? 1 : 0),
+    // 清河：粮足先强军，粮紧先收粮；钱紧卖货，士气低时优先抚恤
+    qinghe_luojia: () => (s.cities.changan.troops < 9 ? 0 : 1),
+    qinghe_yaobu: () => (s.cities.changan.troops >= 9 || s.court.zhan >= 55) ? 0 : 1,
+    qinghe_fuke: () => (s.gold >= 45 ? 0 : 1),
+    qinghe_zuwang: () => 0,
+    qinghe_jiuzhi: () => (s.morale < 50 ? 0 : 1),
+    qinghe_danyao: () => (s.gearBonus >= 0.08 ? 0 : 1),
+    qinghe_zhaolao: () => (s.grain < 70 ? 0 : 1),
+    qinghe_liumin: () => (s.popularity < 45 ? 1 : 0),
+    qinghe_shangdui: () => (s.gold < 55 ? 0 : 1),
   };
   const i = table[ev.id] ? table[ev.id]() : 0;
   return Math.min(i, ev.options.length - 1);

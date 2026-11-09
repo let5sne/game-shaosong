@@ -444,6 +444,33 @@ export const EVENTS = [
       { label: '集中弹药打硬仗', desc: '士气 +6，民心 -3（征发民夫转运）', apply: s => { s.morale += 6; s.popularity -= 3; } },
     ],
   },
+  {
+    id: 'qinghe_zhaolao', title: '寨老输粟', tag: '清河',
+    cond: s => s.scenarioId === 'qinghe' && s.turn >= 2 && s.cities.changan.owner === 'song',
+    text: '寨老领着乡人抬来新粟，执意要送到寨门口：「五位的枪我们看不懂，可守寨的心是热的。」',
+    options: [
+      { label: '收粟谢乡', desc: '民心 +5，粮秣 +18', apply: s => { s.popularity += 5; s.grain += 18; } },
+      { label: '留粟分饥', desc: '民心 +9，粮秣 +8（先紧着乡里）', apply: s => { s.popularity += 9; s.grain += 8; } },
+    ],
+  },
+  {
+    id: 'qinghe_liumin', title: '流民投寨', tag: '清河',
+    cond: s => s.scenarioId === 'qinghe' && s.turn >= 2 && s.cities.changan.owner === 'song',
+    text: '蕃骑寇边，沿途村寨被焚，流民扶老携幼投奔清河。寨中粮薄，人心却热。陈素望着队伍里的伤者，先动了手。',
+    options: [
+      { label: '编入乡勇', desc: '清河 +2 营，粮秣 -8', apply: s => { s.cities.changan.troops += 2; s.grain -= 8; } },
+      { label: '开棚赈济', desc: '民心 +8，粮秣 -12', apply: s => { s.popularity += 8; s.grain -= 12; } },
+    ],
+  },
+  {
+    id: 'qinghe_shangdui', title: '商队易货', tag: '清河',
+    cond: s => s.scenarioId === 'qinghe' && s.turn >= 3 && s.cities.changan.owner === 'song',
+    text: '一支蕃汉互市的商队请求入寨歇脚，愿以皮毛药材易盐铁。王浩川压低声音：「让他们进来——来路，也是消息。」',
+    options: [
+      { label: '许其互市', desc: '缗钱 +20，民心 +2', apply: s => { s.gold += 20; s.popularity += 2; } },
+      { label: '榷买军资', desc: '缗钱 +8，本局攻势 +3%（械利）', apply: s => { s.gold += 8; s.gearBonus += 0.03; } },
+    ],
+  },
 ];
 
 export const TERRAIN_LABEL = { plain: '平原', mountain: '山险', river: '水网', coast: '滨海' };
@@ -499,12 +526,12 @@ export const SCENARIOS = [
     // 西北边地：只留清河一线接敌，江南诸州照旧作后院，金军东路压力不至牵动本关
     owners: { changan: 'song' },
     troops: {
-      changan: 11, luoyang: 18, taiyuan: 14, kaifeng: 18, dengzhou: 8,
+      changan: 11, luoyang: 16, taiyuan: 14, kaifeng: 18, dengzhou: 8,
       shouchun: 8, chuzhou: 8, xiangyang: 6, luzhou: 6, jiankang: 6,
     },
     jinEveryTurn: true,
     eventChance: 0.55, eventMinTurn: 2,
-    events: ['qinghe_luojia', 'qinghe_yaobu', 'qinghe_fuke', 'qinghe_zuwang', 'qinghe_jiuzhi', 'qinghe_danyao', 'kuibing', 'caoyun', 'minxian'],
+    events: ['qinghe_luojia', 'qinghe_yaobu', 'qinghe_fuke', 'qinghe_zuwang', 'qinghe_jiuzhi', 'qinghe_danyao', 'qinghe_zhaolao', 'qinghe_liumin', 'qinghe_shangdui'],
     hold: ['changan'],
     capture: [],
     bonus: ['luoyang'],

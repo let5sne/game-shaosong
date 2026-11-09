@@ -577,7 +577,9 @@ export class GameState {
       this.court.zhan = clamp(this.court.zhan + Math.round((h.zhanDelta || 0) / 2), 0, 100);
       this.court.he = clamp(this.court.he + Math.round((h.heDelta || 0) / 2) + VICE_COURT_HE, 0, 100);
       this.morale = clamp(this.morale + (h.morale || 0) * 0.25, 0, 100);
-      this.say(`【分路】以${h.name}为${h.title}，领「${h.art?.name || '诸军'}」别镇一路。另置幕府耗缗钱 ${VICE_COST_GOLD}、每回合加耗 ${GEO.viceUpkeep} 粮；诸将不相统属，主和 +${VICE_COURT_HE}。`, 'event');
+      this.say(h.squad
+        ? `【分组】以${h.name}别领一组，行「${h.art?.name || '诸军'}」另镇一城。耗队费 ${VICE_COST_GOLD} 钱、每回合加耗 ${GEO.viceUpkeep} 粮；两不相属，稳守 +${VICE_COURT_HE}。`
+        : `【分路】以${h.name}为${h.title}，领「${h.art?.name || '诸军'}」别镇一路。另置幕府耗缗钱 ${VICE_COST_GOLD}、每回合加耗 ${GEO.viceUpkeep} 粮；诸将不相统属，主和 +${VICE_COURT_HE}。`, 'event');
     } else {
       this.heroId = heroId;
       this.heroCity = null;   // 更易主帅，旧日驻节自然作废
@@ -619,18 +621,23 @@ export class GameState {
     if (!this._spend()) return false;
     this[key] = cityId;
     this.morale += 2;
-    this.say(`【督军】${h.name}持节驻${c.name}${vice ? '（分路）' : ''}，领「${h.art?.name || '诸军'}」：自此出兵战法加倍，本城守备益固。`, 'event');
+    this.say(h.squad
+      ? `【坐镇】${h.name}坐镇${c.name}${vice ? '（分组）' : ''}，行「${h.art?.name || '诸军'}」：自此出兵战法加倍，本城守备益固。`
+      : `【督军】${h.name}持节驻${c.name}${vice ? '（分路）' : ''}，领「${h.art?.name || '诸军'}」：自此出兵战法加倍，本城守备益固。`, 'event');
     this.changed(); return true;
   }
 
   qinzheng() {
-    if (this.charge) { this.say('黄旗已出，本回合无须再树。', 'info'); return false; }
-    if (this.chargeUsed >= MAX_CHARGE) { this.say('亲征之令已尽，官家不宜再轻身出驻。', 'bad'); return false; }
+    const qh = this.scenarioId === 'qinghe';
+    if (this.charge) { this.say(qh ? '全队已压上，本回合无须再举。' : '黄旗已出，本回合无须再树。', 'info'); return false; }
+    if (this.chargeUsed >= MAX_CHARGE) { this.say(qh ? '压上之令已尽，弹药见底，不能再倾巢而出。' : '亲征之令已尽，官家不宜再轻身出驻。', 'bad'); return false; }
     if (!this._spend(2)) return false;
     this.charge = 1; this.chargeUsed++;
     this.morale += 10; this.popularity -= 4; this.court.zhan += 4;
     this.jinFury += 1;
-    this.say(`【御驾亲征】官家出驻建康，黄旗渡江。本回合诸军攻势 +25%，然民力稍扰、金人知我主力所在（余 ${MAX_CHARGE - this.chargeUsed} 次）。`, 'event');
+    this.say(qh
+      ? `【全员压上】五械齐出、压至阵前。本回合攻势 +25%，然弹药辎重损耗殊巨（余 ${MAX_CHARGE - this.chargeUsed} 次）。`
+      : `【御驾亲征】官家出驻建康，黄旗渡江。本回合诸军攻势 +25%，然民力稍扰、金人知我主力所在（余 ${MAX_CHARGE - this.chargeUsed} 次）。`, 'event');
     this.changed(); return true;
   }
 
@@ -755,7 +762,9 @@ export class GameState {
       }
       detail = `克${to.name}，存 ${survivors} 营，须再整军。`;
       if (side === 'jin') {
-        for (const [key, name] of [['heroCity', '都督'], ['viceHeroCity', '分路都督']]) {
+        for (const [key, name] of this.scenarioId === 'qinghe'
+          ? [['heroCity', '队长'], ['viceHeroCity', '分组']]
+          : [['heroCity', '都督'], ['viceHeroCity', '分路都督']]) {
           if (this[key] !== to.id) continue;
           const other = key === 'heroCity' ? this.viceHeroCity : this.heroCity;
           // 城虽陷，幕府就近移节：不必每失一城便重下一道驻节令
@@ -769,7 +778,9 @@ export class GameState {
       if (side === 'song') {
         this.lastCaptureTurn = this.turn;
         this.morale += 8; this.popularity += 3; this.court.zhan += 5; this.court.he -= 2;
-        if (to.id === 'kaifeng') this.say('★ 东京开封光复！旧都父老夹道，官家入城，百官泣拜。', 'event');
+        if (to.id === 'kaifeng') this.say(this.scenarioId === 'qinghe'
+          ? '★ 东京开封克复！蕃部后路震动，寨中士气大振。'
+          : '★ 东京开封光复！旧都父老夹道，官家入城，百官泣拜。', 'event');
         if (to.id === 'yanjing') this.say('★ 燕京旗下！自石晋以来四百余年，燕云终归版籍。', 'event');
       } else {
         this.popularity -= 4; this.morale -= 5;
@@ -785,7 +796,7 @@ export class GameState {
 
     const qinghe = this.scenarioId === 'qinghe';
     const label = side === 'song' ? (qinghe ? '【清河】' : '【北伐】') : (qinghe ? '【蕃骑叩边】' : '【金军南下】');
-    const stationTag = side === 'song' ? '都督亲督' : '都督坐镇';
+    const stationTag = side === 'song' ? (qinghe ? '队长亲督' : '都督亲督') : (qinghe ? '队长坐镇' : '都督坐镇');
     const geo = [P.cross ? `渡${P.cross}` : '', P.isolated ? (side === 'song' ? '孤军' : '孤城') : '', P.stationed ? stationTag : ''].filter(Boolean).join(' · ');
     this.say(`${label}${geo ? `〔${geo}〕` : ''}${from.name}出 ${send} 营（攻势 ${atk.toFixed(1)}）／${to.name}守军 ${defenderTroops} 营（守势 ${def.toFixed(1)}）：${detail}`, win ? (side === 'song' ? 'good' : 'bad') : (side === 'song' ? 'bad' : 'good'));
     // 治略：战罢论功，在任将领按胜败累积阅历；金军叩边时守城亦算历练
@@ -803,9 +814,11 @@ export class GameState {
     this.say(`── ${this.yearName} · 第 ${this.turn} 回合终 ──`, 'divider');
 
     // 驻节城若已易主，该路都督还朝
-    for (const [key, name] of [['heroCity', '都督'], ['viceHeroCity', '分路都督']]) {
+    for (const [key, name] of this.scenarioId === 'qinghe'
+      ? [['heroCity', '队长'], ['viceHeroCity', '分组']]
+      : [['heroCity', '都督'], ['viceHeroCity', '分路都督']]) {
       if (this[key] && this.cities[this[key]]?.owner !== 'song') {
-        this.say(`【督军】${this.cities[this[key]].name}已非我有，${name}还朝，驻节之命遂废。`, 'bad');
+        this.say(`【督军】${this.cities[this[key]].name}已非我有，${name}${this.scenarioId === 'qinghe' ? '归队' : '还朝'}，驻节之命遂废。`, 'bad');
         this[key] = null;
       }
     }
@@ -870,11 +883,15 @@ export class GameState {
         const c = this.cities[id];
         if (c.troops > 2 && !artValue(this, id, 'supply')) c.troops -= 1;
       });
-      this.say(`【粮道】${sup.isolated.map(id => this.cities[id].name).join('、')}孤悬，不通行在：士气 -1${bleed ? '，久戍有逃亡' : ''}。`, 'bad');
+      const isoTxt = this.scenarioId === 'qinghe' ? '孤悬敌后，不通后队' : '孤悬，不通行在';
+      this.say(`【粮道】${sup.isolated.map(id => this.cities[id].name).join('、')}${isoTxt}：士气 -1${bleed ? '，久戍有逃亡' : ''}。`, 'bad');
     }
 
     // 金军行动：前线每回合都在集结，久拖必有大举南下
-    const frontier = this.jinCities.filter(c => c.links.some(id => this.cities[id].owner === 'song'));
+    // 清河关：蕃部只从东面大寨一线叩边，中原与淮上的烽烟不至牵动本关
+    const qh = this.scenarioId === 'qinghe';
+    const frontier = this.jinCities.filter(c => c.links.some(id => this.cities[id].owner === 'song')
+      && (!qh || c.links.includes('changan')));
     // 兵源有额，前线金军不会无限膨胀
     frontier.filter(c => c.troops < 15).forEach(c => { c.troops += 1; });
     // 金人秋高马肥方南牧：春、夏两季休兵，正是官家北伐的窗口
@@ -890,18 +907,22 @@ export class GameState {
     if (this.turn % 2 === 0 && frontier.length) {
       const c = this.pick(frontier);
       if (c.troops < 18) c.troops += 3 + this.jinFury * 2;
-      this.say(`【谍报】金人于${c.name}增兵，其势益盛。`, 'bad');
+      this.say(qh
+        ? `【哨报】蕃部于${c.name}调集兵马，其势益盛。`
+        : `【谍报】金人于${c.name}增兵，其势益盛。`, 'bad');
     }
 
-    // 每四回合无北复之音，朝中苟安之气渐长
+    // 每四回合无北复之音，朝中苟安之气渐长（清河关：久无胜果，寨中人心浮动）
     const idle = this.turn - this.lastCaptureTurn;
     if (idle > 0 && idle % 4 === 0) {
       this.court.he += 4; this.court.zhan -= 2; this.popularity -= 1;
-      this.say('【朝议】久无北复之音，苟安之论渐起，主和益盛。', 'bad');
+      this.say(qh
+        ? '【寨议】连日守寨无捷音，人心浮动，稳守之论渐起。'
+        : '【朝议】久无北复之音，苟安之论渐起，主和益盛。', 'bad');
     }
 
     // 朝局自然演变
-    if (this.court.he > 72) this.say('朝中议和之声日盛，北伐之议渐寝。', 'bad');
+    if (this.court.he > 72) this.say(qh ? '寨中稳守之论日盛，进取之议渐寝。' : '朝中议和之声日盛，北伐之议渐寝。', 'bad');
     if (this.court.zhan > 75 && this.grain < 60) { this.morale -= 2; }
     this.clampAll();
     this.checkEnd();
@@ -919,11 +940,14 @@ export class GameState {
   }
 
   jinAI() {
+    const qh = this.scenarioId === 'qinghe';
     const candidates = [];
     this.jinCities.forEach(c => {
       c.links.forEach(id => {
         const t = this.cities[id];
         if (t.owner !== 'song') return;
+        // 清河关：蕃部只叩清河一线，淮上江左的州郡不牵动
+        if (qh && t.id !== 'changan') return;
         // 旧都与燕云是金人命脉，失之必以重兵反扑；行在、建康亦为南下所图
         const prize = (t.seat ? 6 : 0) + (t.capitalOfSong ? 3 : 0)
           + (t.id === 'kaifeng' || t.id === 'yanjing' ? 5 : 0);
@@ -932,8 +956,8 @@ export class GameState {
       });
     });
     candidates.sort((a, b) => b.score - a.score);
-    // 秋冬季大举南下，随国势与积怒增兵，最多三路并进
-    let attacks = Math.min(2 + (this.turn >= 16 ? 1 : 0) + (this.jinFury >= 4 ? 1 : 0), 3);
+    // 秋冬季大举南下，随国势与积怒增兵，最多三路并进；清河关蕃骑每轮只叩一路
+    let attacks = qh ? 1 : Math.min(2 + (this.turn >= 16 ? 1 : 0) + (this.jinFury >= 4 ? 1 : 0), 3);
     let done = 0;
     const used = new Set();
     for (const { c, t } of candidates) {
@@ -948,7 +972,7 @@ export class GameState {
       this.emit('march', { from: c.id, to: t.id, owner: 'jin', result: res.win ? 'win' : 'lose' });
       attacks--; done++;
     }
-    if (!done) this.say('【谍报】金军于北岸集结，尚未举兵。', 'info');
+    if (!done) this.say(qh ? '【哨报】蕃骑于大寨整军，尚未叩边。' : '【谍报】金军于北岸集结，尚未举兵。', 'info');
   }
 
   maybeEvent() {
@@ -1048,7 +1072,7 @@ export function battleParams(state, from, to, side, send) {
 
   if (songAtk) {
     atkParts.push(['士气', state.morale / 320]);
-    if (state.charge) atkParts.push(['御驾亲征', 0.25]);
+    if (state.charge) atkParts.push([state.scenarioId === 'qinghe' ? '全员压上' : '御驾亲征', 0.25]);
     atkParts.push(['都督', state.hero?.atk || 0]);
     atkParts.push(['军械', state.gearBonus]);
     if (ecoBonus.atk) atkParts.push(['治略·器械与阅历', ecoBonus.atk]);

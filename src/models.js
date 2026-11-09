@@ -439,8 +439,8 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
-/** 牙边军旗：布纹、金线、大字、三角牙边 */
-export function makeFlagTexture(song) {
+/** 牙边军旗：布纹、金线、大字、三角牙边。big/era 可覆写阵营字与年款（清河关用「蕃／蕃部」「清河」） */
+export function makeFlagTexture(song, big, era) {
   const cv = canvas(384, 240);
   const ctx = cv.getContext('2d');
   const base = song ? '#a8392f' : '#2f3d51';
@@ -467,10 +467,10 @@ export function makeFlagTexture(song) {
   ctx.fillStyle = song ? '#f7e9c8' : '#e9e6d4';
   ctx.font = 'bold 132px "Songti SC","STSong","SimSun",serif';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(song ? '宋' : '金', 176, 118);
+  ctx.fillText(big || (song ? '宋' : '金'), 176, 118);
   ctx.font = '30px "Songti SC","STSong","SimSun",serif';
   ctx.fillStyle = gold;
-  ctx.fillText(song ? '建炎' : '天会', 300, 118);
+  ctx.fillText(era || (song ? '建炎' : '天会'), 300, 118);
   // 右侧牙边（三角缺口）
   ctx.globalCompositeOperation = 'destination-out';
   for (let y = 10; y < 240; y += 30) {
@@ -515,7 +515,7 @@ export function makeLabelTexture() {
   tex.anisotropy = 8;
   return { cv, tex };
 }
-export function drawLabel(cv, city, selected) {
+export function drawLabel(cv, city, selected, foe = '金') {
   const ctx = cv.getContext('2d');
   const W = cv.width, H = cv.height;
   ctx.clearRect(0, 0, W, H);
@@ -537,13 +537,13 @@ export function drawLabel(cv, city, selected) {
   ctx.fillText(city.name, 54, 92, 560);
   ctx.font = '52px "Songti SC","STSong","SimSun",serif';
   ctx.fillStyle = '#6a6355';
-  ctx.fillText(`${song ? '宋' : '金'} · ${city.troops} 营`, 58, 180);
+  ctx.fillText(`${song ? '宋' : foe} · ${city.troops} 营`, 58, 180);
   ctx.fillStyle = accent;
   roundRect(ctx, 646, 148, 86, 70, 10); ctx.fill();
   ctx.fillStyle = '#faf4e4';
   ctx.font = 'bold 50px "Songti SC","STSong","SimSun",serif';
   ctx.textAlign = 'center';
-  ctx.fillText(song ? '宋' : '金', 689, 185);
+  ctx.fillText(song ? '宋' : foe, 689, 185);
   ctx.textAlign = 'start';
 }
 

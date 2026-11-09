@@ -152,16 +152,16 @@ const TEMPLATE = `
     <div class="card-eyebrow">御前条陈</div>
     <h2>玩法略要</h2>
     <div class="help-grid">
-      <section><h3>一、大局</h3><p>靖康之后，宋据江左，金占中原。你每回合有若干<b>政令</b>，用于整军、筹粮、进军、拜将等。点「结束回合」后，度支结算、金军行动、随机事件依次发生。</p></section>
-      <section><h3>二、用兵与推演</h3><p>先点选一座己方州郡，再按「进军」，右栏即列出<b>进兵推演</b>：每个相邻州郡的胜算、攻守势区间、克城后存兵、政令与粮耗，以及士气／战法／渡河／补给／地形的逐项拆解，点一行便可下令；州郡索引的城名后也标了胜算。攻金城即攻城战，攻己城为移防。每城每回合只可整军一次，且受<b>兵额</b>所限；克城后损兵甚重，须就地休整。临阵双方各有浮动，胜算并非必胜之数。</p></section>
-      <section><h3>三、朝局</h3><p>主战威望高则政令多、军心盛；主和过盛则北伐之议渐寝。任命都督会明显改变朝局。民心决定粮赋，士气决定攻势，粮尽则军自溃。<b>朝议前后相因</b>：秦桧留置阙下，方有和议之诏；和议既定，又及岳侯兵柄。某些选项会留下长久后果，并随存档保留，不同裁断将走向不同的朝局。</p></section>
-      <section><h3>四、胜败</h3><p><b>胜</b>：收复东京开封与燕京，并把金人所据州郡压到 ${VICTORY_JIN_LIMIT} 州以内（或尽逐金人）；只取两京而中原残敌尚众，不算中兴。<b>败</b>：临安／建康失守、民心归零、连岁乏粮，或于回合上限内未竟全功。开场页可择<b>三档国势</b>：宽和、本色、艰险，分别改金军兵势、仓廪、回合上限与开局变局；每局另有两条随机变局，局号注于战报与「北伐大计」。</p></section>
+      <section id="hs1"><h3>一、大局</h3><p>靖康之后，宋据江左，金占中原。你每回合有若干<b>政令</b>，用于整军、筹粮、进军、拜将等。点「结束回合」后，度支结算、金军行动、随机事件依次发生。</p></section>
+      <section><h3>二、用兵与推演</h3><p>先点选一座己方州郡，再按「进军」，右栏即列出<b>进兵推演</b>：每个相邻州郡的胜算、攻守势区间、克城后存兵、政令与粮耗，以及士气／战法／渡河／补给／地形的逐项拆解，点一行便可下令；州郡索引的城名后也标了胜算。攻敌城即攻城战，攻己城为移防。每城每回合只可整军一次，且受<b>兵额</b>所限；克城后损兵甚重，须就地休整。临阵双方各有浮动，胜算并非必胜之数。</p></section>
+      <section id="hs3"><h3>三、朝局</h3><p>主战威望高则政令多、军心盛；主和过盛则北伐之议渐寝。任命都督会明显改变朝局。民心决定粮赋，士气决定攻势，粮尽则军自溃。<b>朝议前后相因</b>：秦桧留置阙下，方有和议之诏；和议既定，又及岳侯兵柄。某些选项会留下长久后果，并随存档保留，不同裁断将走向不同的朝局。</p></section>
+      <section id="hs4"><h3>四、胜败</h3><p><b>胜</b>：收复东京开封与燕京，并把金人所据州郡压到 ${VICTORY_JIN_LIMIT} 州以内（或尽逐金人）；只取两京而中原残敌尚众，不算中兴。<b>败</b>：临安／建康失守、民心归零、连岁乏粮，或于回合上限内未竟全功。开场页可择<b>三档国势</b>：宽和、本色、艰险，分别改金军兵势、仓廪、回合上限与开局变局；每局另有两条随机变局，局号注于战报与「北伐大计」。</p></section>
       <section><h3>五、操作</h3><p>拖拽旋转舆图、滚轮缩放、右键平移、点选州郡。<kbd>空格</kbd>结束回合，<kbd>Esc</kbd>取消进军，<kbd>H</kbd>打开本页，<kbd>R</kbd>复位视角，<kbd>A</kbd>开关托管推演，<kbd>Z</kbd>／<kbd>Ctrl+Z</kbd>（或顶栏 <b>↶</b>）<b>悔棋</b>撤回上一令，可连退至多 20 步；托管推演中不可悔。窄屏下三栏改作<b>底部抽屉</b>，点底栏「大计／州郡／舆图」切换。音效开关会被记住。局面<b>逐令自动存档</b>，刷新或关机后自开场页「续上一局」接续；终局清档。顶栏 <b>册</b> 可开<b>存档三卷</b>：另存一卷留档、载入旧卷再图进取，当前卷逐令自记。以 <b>?seed=123456</b> 打开可固定局号，重演同一份变局与战报。<kbd>S</kbd> 或顶栏 <b>⚙</b> 打开<b>设置</b>：观感、性能、开局偏好与局号在此统一择定，改动即存于本机并同步到地址栏，链接可直接分享复现；「即时」项立刻生效，「重载」项按「应用并重载」重建舆图并自动续回原局面，「下局」项在开新局时生效。<b>设置 → 地貌精度</b>可选「原味／高清·宣纸（默认）／高清·写实」：高清档加密地形网格、叠山脊沟壑、陡坡巨岩、远山天际线与皴纹法线，低配档自动回落原味以免拖慢软件渲染。三维舆图按设备自动择<b>性能档</b>（DPR 上限、阴影、植被密度），可在设置中手动锁定高／低；系统开启「减弱动效」时波光与旗面静止。</p></section>
-      <section><h3>六、节律</h3><p>金骑只在<b>秋、冬</b>南牧，春夏淮上暂宁，正是整军北伐的窗口。<b>冬季黄河冰合</b>，涉水之阻与据河之利俱减，金骑踏冰可南，须早为之备。先取徐州、蔡州等外围，再图开封；「御驾亲征」叠加都督加成可破坚城，然须两道政令、每局至多 ${MAX_CHARGE} 次，且黄旗一动，金人益知我主力所在。久不北伐则主和日盛——偏安拖不出中兴。</p></section>
-      <section><h3>七、托管推演</h3><p>开场页按「托管推演」，或局中按顶栏 <b>▶</b>／<kbd>A</kbd>，便由 AI 代为临朝，逐回合决策，直至克复两京。托管守<b>三段战略</b>：固淮北 → 复旧都 → 取燕云；每回合至多两度进军、两处整军。可暂停、切换 ×1／×3／×8 倍速、随时停止接手。若一局失利会自动重整山河再北伐。</p></section>
+      <section id="hs6"><h3>六、节律</h3><p>金骑只在<b>秋、冬</b>南牧，春夏淮上暂宁，正是整军北伐的窗口。<b>冬季黄河冰合</b>，涉水之阻与据河之利俱减，金骑踏冰可南，须早为之备。先取徐州、蔡州等外围，再图开封；「御驾亲征」叠加都督加成可破坚城，然须两道政令、每局至多 ${MAX_CHARGE} 次，且黄旗一动，金人益知我主力所在。久不北伐则主和日盛——偏安拖不出中兴。</p></section>
+      <section id="hs7"><h3>七、托管推演</h3><p>开场页按「托管推演」，或局中按顶栏 <b>▶</b>／<kbd>A</kbd>，便由 AI 代为临朝，逐回合决策，直至克复两京。托管守<b>三段战略</b>：固淮北 → 复旧都 → 取燕云；每回合至多两度进军、两处整军。可暂停、切换 ×1／×3／×8 倍速、随时停止接手。若一局失利会自动重整山河再北伐。</p></section>
       <section><h3>八、推演公允</h3><p>托管与官家用的是<b>同一套规则、同一份粮账、同一个随机数</b>，没有隐藏兵力或暗改判定；它只是把攻守之势算得更准、更不肯冒险。托管中的战报、事件裁断与三维行军，与你亲手所下之令并无二致。</p></section>
       <section><h3>九、山河与粮道</h3><p>黄河、淮河、长江、钱塘各有<b>津渡</b>。凡涉水进军，攻势受挫、守方据河得利，且须多下<b>一道政令</b>并添舟楫粮耗；<b>水师</b>都督或御驾亲征可免那道政令。州郡须由己方城池连成一线通向行在，方为<b>粮道通</b>；否则即为孤城——岁赋折半、兵额减半、士气渐堕、久戍逃亡，出兵与守备俱受损。相邻己城越多，<b>连营犄角</b>越厚。开局长安便孤悬敌后，唯有打通洛阳、邓州一线方能接上粮道。<b>粮道越远，转运越贵</b>：自深入中原的州郡出兵，每营耗粮随距行在的跳数递增，故北伐愈深，愈须先积谷、再进兵。</p></section>
-      <section><h3>十、战法与分路督军</h3><p>八位都督各有<b>战法</b>：岳飞步阵利于平原，韩世忠水师济河，吴玠据险擅长山险且能持孤军，刘锜婴城固守，张俊广兵额，李纲、赵鼎理政足食，秦桧则军备废弛。故渡淮之时宜任水师，转入中原平原则改任步阵。择一己方州郡下「<b>督军</b>」令，都督持节驻此：自本城出兵战法加倍，本城守备益固；换将或该城失守，驻节即废。<b>两路分镇</b>：拜主帅后可于左栏切到「拜分路」，再择一将（耗缗钱 ${VICE_COST_GOLD}）别当一面——分帅战法只及驻节本城，全局粮赋、兵额与朝政仍归主帅，且每回合另耗 2 粮、主和 +2；一州不置二节，亦可「罢」其幕府。守势吃紧时以刘锜、吴玠分镇，孤城未通粮道则以赵鼎，皆有其时。</p></section>
+      <section id="hs10"><h3>十、战法与分路督军</h3><p>八位都督各有<b>战法</b>：岳飞步阵利于平原，韩世忠水师济河，吴玠据险擅长山险且能持孤军，刘锜婴城固守，张俊广兵额，李纲、赵鼎理政足食，秦桧则军备废弛。故渡淮之时宜任水师，转入中原平原则改任步阵。择一己方州郡下「<b>督军</b>」令，都督持节驻此：自本城出兵战法加倍，本城守备益固；换将或该城失守，驻节即废。<b>两路分镇</b>：拜主帅后可于左栏切到「拜分路」，再择一将（耗缗钱 ${VICE_COST_GOLD}）别当一面——分帅战法只及驻节本城，全局粮赋、兵额与朝政仍归主帅，且每回合另耗 2 粮、主和 +2；一州不置二节，亦可「罢」其幕府。守势吃紧时以刘锜、吴玠分镇，孤城未通粮道则以赵鼎，皆有其时。</p></section>
       <section><h3>十一、短剧本</h3><p>开场页可切到「<b>短剧本</b>」：<b>清河烽火</b>（改编新关）以长安拟清河边寨、洛阳拟蕃部大寨，现代五人小队守寨九轮，能反手破寨便是大捷——械客只在此关登场，且各有专属事件；<b>顺昌婴城</b>以寿春当顺昌，九回合内守住寿春、楚州，能袭取海州便提前大捷；<b>郾城破阵</b>以蔡州当前锋大营，十二回合内克复应天府与徐州，且大营与淮南后路皆不可失。三关皆为<b>固定开局</b>（不抽随机变局、主帅与驻节既定），金人每回合叩边、锐气另作校定，朝议也只用本关的几张事件；局号仍决定战斗与事件的掷点，故可复现整关。舆图上的<b>朱批圈</b>标出必守与必取之州，左栏军令卡逐项记进度。必守之州中途易主不必绝望，抢在回合上限前夺回即可；到时限仍在敌手，或军令未竟而时限已到，便算败。</p></section>
       <section><h3>十二、治略（可选扩展）</h3><p>于<b>设置 → 开局与偏好 → 治略 · 经营养成</b>开启（或加 <b>?economy=1</b>），即刻生效，无需重开。默认关闭，以守住固定局号的胜率基线；关掉只冻结、不丢进度。<b>营建</b>：在己方州郡卡中置屯田（岁赋）、仓廪（减戍耗、备荒）、军器作坊（产军械）、市舶（进缗钱），各可升三级，越升越贵，每级一道政令——种田与北伐争的是同一份资源；城池一旦易主，历年设施尽付兵燹。<b>差遣与历练</b>：八员皆可派赴州郡督屯、巡边、督造，每员每回合一次、全朝至多两遣；差遣、实战与驻节都积阅历，Lv3／Lv5 各悟一条专属战法，但<b>只在拜为主帅或分帅时生效</b>，故「先培养谁、再拜谁」本身是一层取舍。军械存量既加攻势（封顶 +12%），整军时也可耗 6 副多募一营、省粮 3。所有加成仍经<b>同一套攻守系数</b>计入战前推演与托管，不作暗改。</p></section>
     </div>
@@ -240,6 +240,36 @@ const writeScenario = v => { try { localStorage.setItem(SCEN_KEY, v); } catch (_
 
 export function createUI(root, state, opts = {}) {
   root.innerHTML = TEMPLATE;
+  // 清河关（持械入宋改编）：局内文案整体切入小队语境——
+  // 官家→队长、朝局→军心、金军→蕃部、起居注→队中记事、御驾亲征→全员压上。
+  const QH = state.scenarioId === 'qinghe';
+  if (QH) {
+    const h = (id, title, html) => {
+      const e = root.querySelector('#' + id);
+      if (e) e.innerHTML = `<h3>${title}</h3><p>${html}</p>`;
+    };
+    h('hs1', '一、大局',
+      '五人小队全员携械，坠入北宋末年的西北边地，以<b>清河寨</b>（长安）为立足点。每回合有若干<b>政令</b>，用于整军、筹粮、进军、定队长等。点「结束回合」后，度支结算、蕃骑叩边、随机事件依次发生。');
+    h('hs3', '三、军心',
+      '<b>锐意</b>盛则政令多、士气壮；<b>稳守</b>之论过盛则进取之议渐寝。定队长会明显改变全队战法。民心决定粮赋，士气决定攻势，粮尽则军心自溃。各番裁断会留下长久后果，并随存档保留，不同裁断将走向不同的局面。');
+    h('hs4', '四、胜败',
+      `<b>胜</b>：守住长安九轮，即「婴寨不堕」；若有余力反手攻破洛阳（蕃部大寨），则成「清河大捷」，提前终局。<b>败</b>：清河失守而至回合上限仍未夺回。本关为<b>固定开局</b>（不抽随机变局、队长与驻镇既定），蕃骑每回合叩边、锐气另作校定；局号决定战斗与事件的掷点，故可复现整局。`);
+    h('hs6', '六、节律',
+      `蕃骑每轮必来叩边，无季节窗口可言。长安孤悬敌后：岁赋折半、兵额减半、士气渐堕，须以整军与胜果弥补。「全员压上」叠加队长坐镇可破坚城，然须两道政令、每局至多 ${MAX_CHARGE} 次，弹药折损殊巨。久无胜果则寨中稳守之论渐起——一味死守，守不出清河的活路。`);
+    h('hs7', '七、托管推演',
+      '开场页按「托管推演」，或局中按顶栏 <b>▶</b>／<kbd>A</kbd>，便由 AI 代为指挥，直至守住清河或破寨大捷。可暂停、切换 ×1／×3／×8 倍速、随时停止接手。');
+    h('hs10', '十、队内分工',
+      `五人各有所长（悬停左栏可见）：林昭统军、长风攻坚、振邦造械、浩川组网、素衣救人——现代火器强在战法，弹药与人手须省着用。定队长后全队常得其战法；择己方州郡下「坐镇」令，队长坐镇该城：自此出兵战法加倍，本城守备益固；换将或该城失守，坐镇即废。<b>另立一组</b>：定队长后可择一人别领一组（耗缗钱 ${VICE_COST_GOLD}），其战法只及坐镇本城，且每回合另耗 2 粮、稳守 +2；一州不置二节，亦可「撤」其幕府。`);
+    const hc = root.querySelector('.help-card');
+    if (hc) {
+      const eb = hc.querySelector('.card-eyebrow'); if (eb) eb.textContent = '行军备忘';
+      const close = hc.querySelector('[data-act="close-help"]'); if (close) close.textContent = '知道了';
+    }
+    const drawer = root.querySelector('[data-act="drawer"][data-id="left"]');
+    if (drawer) drawer.textContent = '大计 · 军心';
+    const leg = root.querySelectorAll('.legend span');
+    if (leg[1]) leg[1].innerHTML = '<i class="dot jin"></i>蕃 · 所据州郡';
+  }
   // 开场页现在是半透明舞台：对局 HUD 必须整层收起，否则顶栏／三栏／战报会与舞台叠在一起。
   root.classList.add('intro-active');
   if (opts.grade === false) root.classList.add('no-grade');
@@ -740,7 +770,7 @@ export function createUI(root, state, opts = {}) {
       html: `粮道断绝 · ${isolated.slice(0, 3).map(c => c.name).join('、')}${isolated.length > 3 ? '等' : ''}孤悬无援`,
       pick: isolated[0].id,
     });
-    if (['春', '夏'].includes(['春', '夏', '秋', '冬'][(s.turn - 1) % 4])) {
+    if (!QH && ['春', '夏'].includes(['春', '夏', '秋', '冬'][(s.turn - 1) % 4])) {
       out.push({ level: 'warn', html: '秋防将至 · 金骑秋冬南牧，宜趁春夏整军北进' });
     }
     if (s.maxTurns - s.turn <= 3) out.push({ level: 'bad', html: `时限将至 · 余 ${s.maxTurns - s.turn} 回合` });
@@ -814,7 +844,7 @@ export function createUI(root, state, opts = {}) {
     return `<section class="card forecast">
       <div class="card-eyebrow">进兵推演 <span class="decree-pip">自 ${esc(from.name)} 出 ${send} 营</span></div>
       <div class="fc-list">${rows}</div>
-      <p class="card-note">渡河须另备舟楫：多耗一道政令与粮秣，攻势受挫；水师都督或御驾亲征可免政令。孤军无继、连营犄角、都督驻节与战法地形，皆已计入上列胜算。按 <kbd>Esc</kbd> 取消。</p>
+      <p class="card-note">渡河须另备舟楫：多耗一道政令与粮秣，攻势受挫；${QH ? '全员压上' : '水师都督或御驾亲征'}可免政令。孤军无继、连营犄角、${QH ? '队长坐镇' : '都督驻节'}与战法地形，皆已计入上列胜算。按 <kbd>Esc</kbd> 取消。</p>
     </section>`;
   }
 
@@ -931,32 +961,32 @@ export function createUI(root, state, opts = {}) {
           <div class="goal ${obj.yanjing ? 'done' : ''}"><i>${obj.yanjing ? '✓' : '○'}</i>燕京</div>
         </div>`}
         ${bar('版籍', songN / (songN + jinN) * 100, '#b5483a')}
-        <div class="mini-row"><span>宋 ${songN} 州 · ${s.totalTroops} 营</span><span>金 ${jinN} 州 · ${s.jinTroops} 营</span></div>
+        <div class="mini-row"><span>宋 ${songN} 州 · ${s.totalTroops} 营</span><span>${QH ? '蕃' : '金'} ${jinN} 州 · ${s.jinTroops} 营</span></div>
         <div class="game-note">${s.scenario ? `${esc(s.scenario.era)} · ${esc(s.scenario.tag)} · 固定开局` : esc(s.diffDef.name)} · 局号 #${s.seed}${s.variant?.notes?.length ? '<br>' + esc(s.variant.notes.join('，')) : ''}</div>
       </section>
 
       <section class="card court">
-        <div class="card-eyebrow">朝局 · 主战与主和</div>
-        ${bar('主战', s.court.zhan, '#b5483a')}
-        ${bar('主和', s.court.he, '#3d4b60')}
-        <p class="card-note">朝论所向，决于政令多寡与军心。主和过盛，北伐之议将寝。</p>
+        <div class="card-eyebrow">${QH ? '军心 · 锐意与稳守' : '朝局 · 主战与主和'}</div>
+        ${bar(QH ? '锐意' : '主战', s.court.zhan, '#b5483a')}
+        ${bar(QH ? '稳守' : '主和', s.court.he, '#3d4b60')}
+        <p class="card-note">${QH ? '寨中人心所向，决于政令多寡与士气。稳守之论过盛，进取之心将寝。' : '朝论所向，决于政令多寡与军心。主和过盛，北伐之议将寝。'}</p>
         ${s.truce ? `<div class="flag-note">和议未废 · 尚余 ${s.truce} 回合</div>` : ''}
-        ${s.charge ? `<div class="flag-note hot">御驾亲征 · 本回合攻势 +25%</div>` : ''}
+        ${s.charge ? `<div class="flag-note hot">${QH ? '全员压上' : '御驾亲征'} · 本回合攻势 +25%</div>` : ''}
       </section>
 
       <section class="card heroes">
-        <div class="card-eyebrow">都督诸军事 <span class="decree-pip">两路分镇</span></div>
-        <div class="hero-current">${hero ? `<b>${hero.name}</b><span>主帅 · ${hero.title} · 攻势 ${hero.atk >= 0 ? '+' : ''}${Math.round(hero.atk * 100)}%</span>` : '<b>阙员</b><span>未拜主帅，诸军不相统属</span>'}</div>
-        ${hero?.art ? `<div class="art-line"><b>${esc(hero.art.name)}</b><span>${esc(hero.art.desc)}（全军常效）</span></div>` : ''}
-        <div class="station-line ${s.heroCity ? 'on' : ''}">${s.heroCity ? `主帅持节驻 <b>${esc(s.cities[s.heroCity]?.name || '—')}</b> · 本城战法 ×1.6、城守 +12%` : '主帅未驻节 · 战法仅得常效'}</div>
+        <div class="card-eyebrow">${QH ? '队内号令' : '都督诸军事'} <span class="decree-pip">${QH ? '两班轮值' : '两路分镇'}</span></div>
+        <div class="hero-current">${hero ? `<b>${hero.name}</b><span>${QH ? '队长' : '主帅'} · ${hero.title} · 攻势 ${hero.atk >= 0 ? '+' : ''}${Math.round(hero.atk * 100)}%</span>` : `<b>阙员</b><span>${QH ? '未定队长，队中号令不一' : '未拜主帅，诸军不相统属'}</span>`}</div>
+        ${hero?.art ? `<div class="art-line"><b>${esc(hero.art.name)}</b><span>${esc(hero.art.desc)}（${QH ? '全队常效' : '全军常效'}）</span></div>` : ''}
+        <div class="station-line ${s.heroCity ? 'on' : ''}">${s.heroCity ? `${QH ? '队长坐镇' : '主帅持节驻'} <b>${esc(s.cities[s.heroCity]?.name || '—')}</b> · 本城战法 ×1.6、城守 +12%` : `${QH ? '队长未坐镇' : '主帅未驻节'} · 战法仅得常效`}</div>
         ${s.viceHero ? `
-          <div class="hero-current vice"><b>${s.viceHero.name}</b><span>分路 · ${s.viceHero.title}</span><button class="vice-dismiss" data-act="vice-dismiss" title="罢分路幕府，省下每回合粮耗">罢</button></div>
+          <div class="hero-current vice"><b>${s.viceHero.name}</b><span>${QH ? '分组' : '分路'} · ${s.viceHero.title}</span><button class="vice-dismiss" data-act="vice-dismiss" title="${QH ? '撤其分组，省下每回合粮耗' : '罢分路幕府，省下每回合粮耗'}">${QH ? '撤' : '罢'}</button></div>
           <div class="art-line"><b>${esc(s.viceHero.art?.name || '诸军')}</b><span>${esc(s.viceHero.art?.desc || '')}（只及驻节本城）</span></div>
-          <div class="station-line ${s.viceHeroCity ? 'on' : ''}">${s.viceHeroCity ? `分帅持节驻 <b>${esc(s.cities[s.viceHeroCity]?.name || '—')}</b> · 本城战法 ×1.6、城守 +12%` : '分帅未驻节 · 须于州郡面板命其持节'}</div>`
-          : '<div class="station-line">未置分路 · 拜主帅后可再择一将别镇一路（每回合加耗 2 粮、主和 +2）</div>'}
+          <div class="station-line ${s.viceHeroCity ? 'on' : ''}">${s.viceHeroCity ? `${QH ? '分组坐镇' : '分帅持节驻'} <b>${esc(s.cities[s.viceHeroCity]?.name || '—')}</b> · 本城战法 ×1.6、城守 +12%` : `${QH ? '分组未坐镇' : '分帅未驻节'} · 须于州郡面板命其持节`}</div>`
+          : `<div class="station-line">${QH ? '未另立组 · 定队长后可再择一人别领一组（每回合加耗 2 粮、稳守 +2）' : '未置分路 · 拜主帅后可再择一将别镇一路（每回合加耗 2 粮、主和 +2）'}</div>`}
         <div class="hero-route-row">
-          <button data-act="hero-route" data-route="main" class="${heroRoute === 'main' ? 'active' : ''}">拜主帅</button>
-          <button data-act="hero-route" data-route="vice" class="${heroRoute === 'vice' ? 'active' : ''}" ${hero ? '' : 'disabled'}>拜分路 · ${VICE_COST_GOLD} 钱</button>
+          <button data-act="hero-route" data-route="main" class="${heroRoute === 'main' ? 'active' : ''}">${QH ? '定队长' : '拜主帅'}</button>
+          <button data-act="hero-route" data-route="vice" class="${heroRoute === 'vice' ? 'active' : ''}" ${hero ? '' : 'disabled'}>${QH ? `另立一组 · ${VICE_COST_GOLD} 钱` : `拜分路 · ${VICE_COST_GOLD} 钱`}</button>
         </div>
         <div class="hero-list">
           ${heroPool(s).map(h => {
@@ -1000,8 +1030,8 @@ export function createUI(root, state, opts = {}) {
       return `<button class="station-btn ${here ? 'active' : ''} ${route === 'vice' ? 'vice' : ''}"
           data-act="dujun" data-route="${route}" data-id="${cityId}"
           ${here || blocked || s.decree < 1 || s.over ? 'disabled' : ''}>
-          ${here ? `✔ ${esc(h.name)}持节驻此` : blocked ? '他路已持节此州' : `命${esc(h.name)}驻节此州`}
-          <em>${here ? '已驻节' : blocked ? '一州不置二节' : route === 'vice' ? '分路 · 1 道政令' : '主帅 · 1 道政令'}</em>
+          ${here ? `✔ ${esc(h.name)}${QH ? '坐镇此' : '持节驻此'}` : blocked ? (QH ? '他组已坐镇此州' : '他路已持节此州') : `${QH ? `命${esc(h.name)}坐镇此州` : `命${esc(h.name)}驻节此州`}`}
+          <em>${here ? (QH ? '已坐镇' : '已驻节') : blocked ? '一州不置二节' : route === 'vice' ? `${QH ? '分组' : '分路'} · 1 道政令` : `${QH ? '队长' : '主帅'} · 1 道政令`}</em>
         </button>`;
     };
 
@@ -1009,7 +1039,7 @@ export function createUI(root, state, opts = {}) {
       <section class="card city-card">
         <div class="card-eyebrow">州郡舆情</div>
         ${c ? `
-          <div class="city-head"><h2>${esc(c.name)}</h2><span class="owner ${c.owner}">${c.owner === 'song' ? '宋' : '金'}</span></div>
+          <div class="city-head"><h2>${esc(c.name)}</h2><span class="owner ${c.owner}">${c.owner === 'song' ? '宋' : QH ? '蕃' : '金'}</span></div>
           <div class="city-tags">
             <span>${TERRAIN_LABEL[c.terrain]}</span>
             <span>守险 +${Math.round(({ plain: 0, mountain: 0.35, river: 0.2, coast: 0.1 }[c.terrain]) * 100)}%</span>
@@ -1022,14 +1052,14 @@ export function createUI(root, state, opts = {}) {
           <div class="city-stats">
             <div><span>驻军</span><b>${c.troops} 营</b></div>
             <div><span>岁赋</span><b>${c.yieldGrain} 粮</b></div>
-            <div><span>粮道</span><b class="txt ${c.owner === 'song' && !linked ? 'warn' : ''}">${c.owner === 'song' ? (linked ? '通行在' : '断绝') : '金据'}</b></div>
+            <div><span>粮道</span><b class="txt ${c.owner === 'song' && !linked ? 'warn' : ''}">${c.owner === 'song' ? (linked ? '通行在' : '断绝') : QH ? '蕃据' : '金据'}</b></div>
             <div><span>连营</span><b class="txt">${sup.support[c.id] || 0} 处</b></div>
           </div>
           ${c.owner === 'song' ? `
             ${s.hero ? stationBtn('main', s.hero, s.heroCity, c.id) : ''}
             ${s.viceHero ? stationBtn('vice', s.viceHero, s.viceHeroCity, c.id) : ''}
           ` : ''}
-          <div class="link-label">官道所通 <span class="link-legend">· 蓝字为津渡，金城后标胜算</span></div>
+          <div class="link-label">官道所通 <span class="link-legend">· 蓝字为津渡，${QH ? '蕃' : '金'}城后标胜算</span></div>
           <div class="link-list">${c.links.map(id => {
             const n = s.cities[id];
             const p = c.owner === 'song' && n.owner === 'jin' ? previewBattle(s, c.id, id) : null;
@@ -1050,7 +1080,7 @@ export function createUI(root, state, opts = {}) {
           <select id="cityJump" aria-label="州郡索引">
             <option value="">择州郡…</option>
             <optgroup label="宋 · 行在版籍">${s.songCities.map(c2 => `<option value="${c2.id}">${esc(c2.name)} · ${c2.troops} 营</option>`).join('')}</optgroup>
-            <optgroup label="金 · 伪据州郡">${s.jinCities.map(c2 => `<option value="${c2.id}">${esc(c2.name)} · ${c2.troops} 营</option>`).join('')}</optgroup>
+            <optgroup label="${QH ? '蕃 · 所据州郡' : '金 · 伪据州郡'}">${s.jinCities.map(c2 => `<option value="${c2.id}">${esc(c2.name)} · ${c2.troops} 营</option>`).join('')}</optgroup>
           </select>
         </div>
       </section>
@@ -1066,8 +1096,8 @@ export function createUI(root, state, opts = {}) {
           ${btn('march', '进军', c && c.owner === 'song' ? '点选相邻州郡' : '先择己方州郡', can.march)}
           ${btn('chouliang', '筹粮', '+40 粮 · 民心 -4', can.chouliang)}
           ${btn('anfu', '安抚', '15 粮 · 民心 +9', can.anfu)}
-          ${btn('qinzheng', '御驾亲征', `2 政令 · 攻势 +25% · 余 ${Math.max(0, MAX_CHARGE - (s.chargeUsed || 0))} 次`, can.qinzheng)}
-          ${btn('heyi', '遣使和议', '55 钱 · 缓兵两回合', can.heyi)}
+          ${btn('qinzheng', QH ? '全员压上' : '御驾亲征', `2 政令 · 攻势 +25% · 余 ${Math.max(0, MAX_CHARGE - (s.chargeUsed || 0))} 次`, can.qinzheng)}
+          ${QH ? '' : btn('heyi', '遣使和议', '55 钱 · 缓兵两回合', can.heyi)}
         </div>
       </section>
 
@@ -1076,7 +1106,7 @@ export function createUI(root, state, opts = {}) {
 
     el.log.classList.toggle('collapsed', logCollapsed);
     el.log.innerHTML = `
-      <div class="log-head"><span>起居注 · 军报</span><i data-act="toggle-log" title="展开／收起">${logCollapsed ? '展开 ▴' : `收起 ▾ · ${s.logs.length} 条`}</i></div>
+      <div class="log-head"><span>${QH ? '队中记事 · 哨报' : '起居注 · 军报'}</span><i data-act="toggle-log" title="展开／收起">${logCollapsed ? '展开 ▴' : `收起 ▾ · ${s.logs.length} 条`}</i></div>
       <div class="log-list">${s.logs.slice(0, 40).map(l => `
         <div class="log-item ${l.type}"><span class="log-turn">${esc(l.tag.split(' · ')[0])}</span><p>${esc(l.text)}</p></div>`).join('')}
       </div>`;
@@ -1140,7 +1170,7 @@ export function createUI(root, state, opts = {}) {
           return;
         }
         if (auto.game >= MAX_AUTO_GAMES) {
-          setAutoDecision(`已推演 ${MAX_AUTO_GAMES} 局仍未竟全功，请官家亲自临朝。`);
+          setAutoDecision(QH ? `已推演 ${MAX_AUTO_GAMES} 局仍未竟全功，请你亲自督队。` : `已推演 ${MAX_AUTO_GAMES} 局仍未竟全功，请官家亲自临朝。`);
           updateAutoHud();
           stopAuto(true);
           return;
@@ -1213,7 +1243,7 @@ export function createUI(root, state, opts = {}) {
     auto.actions = 0;
     auto.stepsInTurn = 0;
     auto.ctx = null;
-    auto.decision = '临朝受命，首拜都督诸军事……';
+    auto.decision = QH ? '临阵定夺，先定队长人选……' : '临朝受命，首拜都督诸军事……';
     auto.token++;
     el.autoHud.hidden = false;
     el.autoHud.classList.remove('paused');
@@ -1243,7 +1273,7 @@ export function createUI(root, state, opts = {}) {
   }
 
   function toggleAuto() {
-    if (auto.running) { stopAuto(); toast('托管已停止，官家可亲自临朝。'); }
+    if (auto.running) { stopAuto(); toast(QH ? '托管已停止，你可亲自督队。' : '托管已停止，官家可亲自临朝。'); }
     else startAuto();
   }
 
@@ -1362,7 +1392,7 @@ export function createUI(root, state, opts = {}) {
       sfx('click');
       return;
     }
-    if (act === 'auto-stop') { stopAuto(); toast('托管已停止，官家可亲自临朝。'); sfx('click'); return; }
+    if (act === 'auto-stop') { stopAuto(); toast(QH ? '托管已停止，你可亲自督队。' : '托管已停止，官家可亲自临朝。'); sfx('click'); return; }
     if (act === 'auto-restart') { stopAuto(); startAuto(); return; }
 
     const passive = ['help', 'close-help', 'mute', 'reset-cam', 'toggle-log',
@@ -1593,7 +1623,7 @@ export function createUI(root, state, opts = {}) {
       auto.ctx = null;
       auto.decision = '';
       el.autoHud.hidden = true;
-      toast('新局已开，愿官家此回直取旧都。');
+      toast(QH ? '新局已开，清河再守一轮。' : '新局已开，愿官家此回直取旧都。');
     }
   }
 
@@ -1655,7 +1685,7 @@ export function createUI(root, state, opts = {}) {
         <h2>${esc(ev.title)}</h2>
         <div class="event-rule"></div>
         <p class="event-text">${esc(ev.text)}</p>
-        <div class="event-label">请官家裁断</div>
+        <div class="event-label">${QH ? '请队长定夺' : '请官家裁断'}</div>
         <div class="event-options">
           ${ev.options.map((o, i) => `
             <button class="event-opt" data-act="event-opt" data-i="${i}">
@@ -1675,8 +1705,8 @@ export function createUI(root, state, opts = {}) {
     const songN = state.songCities.length;
     el.endBody.innerHTML = `
       <div class="end-card ${over.kind}">
-        <div class="end-seal">${over.kind === 'win' ? '中<br>兴' : '南<br>渡'}</div>
-        <div class="eyebrow">${state.scenario ? `${esc(state.scenario.name)} · ` : ''}${over.kind === 'win' ? '大 功 告 成' : '大 势 已 去'}</div>
+        <div class="end-seal">${over.kind === 'win' ? (QH ? '大<br>捷' : '中<br>兴') : QH ? '失<br>守' : '南<br>渡'}</div>
+        <div class="eyebrow">${state.scenario ? `${esc(state.scenario.name)} · ` : ''}${over.kind === 'win' ? (QH ? '捷 报 传 寨' : '大 功 告 成') : '大 势 已 去'}</div>
         <h2>${esc(over.title)}</h2>
         <p>${esc(over.text)}</p>
         <div class="end-stats">

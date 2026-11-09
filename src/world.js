@@ -946,7 +946,13 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
   // 开启贴图时几何在生成阶段就把 UV 压进图集两带（屋顶瓦作／墙面夯土），
   // 不新增批次、不写自定义 shader；关闭时几何与旧版逐字节一致。
   const cityLib = buildCityLibrary(cityTex, matOn);
-  const flagTex = { song: makeFlagTexture(true), jin: makeFlagTexture(false) };
+  // 清河关（持械入宋改编）：敌帜作「蕃」、我帜年款作「清河」，名牌金→蕃
+  const qh = state.scenarioId === 'qinghe';
+  const foeChar = qh ? '蕃' : '金';
+  const flagTex = {
+    song: makeFlagTexture(true, '宋', qh ? '清河' : '建炎'),
+    jin: makeFlagTexture(false, foeChar, qh ? '蕃部' : '天会'),
+  };
   const flagMats = {
     song: makeFlagMaterial(flagTex.song, uTime, FLAG_W),
     jin: makeFlagMaterial(flagTex.jin, uTime, FLAG_W),
@@ -1026,7 +1032,7 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
 
     // 州郡名牌
     const { cv, tex } = makeLabelTexture();
-    drawLabel(cv, c, false);
+    drawLabel(cv, c, false, foeChar);
     const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false }));
     label.scale.set(8.0, 2.50, 1);
     label.position.set(0, lib.height + 2.35, 0);
@@ -1064,6 +1070,80 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
   }
   for (const b of solidBatches) b.im.instanceMatrix.needsUpdate = true;
   for (const b of factionBatches) b.im.instanceMatrix.needsUpdate = true;
+
+  // ── 清河关布景（持械入宋改编）：清河寨环栅望楼 + 蕃部牙帐群 ──
+  // 只在清河关生成、各自合批，约 +5 draw call 换两处地标；他关基线分毫不动。
+  if (state.scenarioId === 'qinghe') {
+    const ringPts = (id, n, r) => {
+      const c = state.cities[id], out = [];
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2 + 0.35;
+        const px = c.x + Math.cos(a) * r, pz = c.z + Math.sin(a) * r;
+        out.push({ x: px, z: pz, y: heightAt(px, pz), rot: a });
+      }
+      return out;
+    };
+    // 清河寨：22 根木栅围一圈（东南留寨门正对官道），南北各一座望楼
+    const rQ = cityViews.changan.lib.half * 1.95 + 0.62 + 0.95;
+    const ringQ = ringPts('changan', 22, rQ).filter(p => !(p.rot > -0.5 && p.rot < 0.5));   // 东面留门迎官道
+    const stakeMat = new THREE.MeshStandardMaterial({ color: 0x6b4e30, roughness: 0.95 });
+    const stakes = new THREE.InstancedMesh(new THREE.BoxGeometry(0.22, 1.15, 0.22), stakeMat, ringQ.length);
+    stakes.castShadow = true;
+    ringQ.forEach((p, i) => {
+      dummy.position.set(p.x, p.y + 0.55, p.z);
+      dummy.rotation.set((hash(p.x, p.z) - 0.5) * 0.14, p.rot * 0.1, (hash(p.z, p.x) - 0.5) * 0.12);
+      dummy.scale.set(1, 0.85 + hash(p.x, p.z) * 0.35, 1);
+      dummy.updateMatrix();
+      stakes.setMatrixAt(i, dummy.matrix);
+    });
+    stakes.instanceMatrix.needsUpdate = true;
+    stakes.frustumCulled = false;
+    stakes.name = 'qinghe-palisade';   // 便于实机验证按名统计
+    scene.add(stakes);
+    const towerMat = new THREE.MeshStandardMaterial({ color: 0x71543a, roughness: 0.9 });
+    const roofMat = new THREE.MeshStandardMaterial({ color: 0x59503f, roughness: 0.95 });
+    for (const ang of [Math.PI / 2, Math.PI * 1.5]) {
+      const cq = state.cities.changan;
+      const tx = cq.x + Math.cos(ang) * rQ, tz = cq.z + Math.sin(ang) * rQ, ty = heightAt(tx, tz);
+      const tower = new THREE.Mesh(new THREE.BoxGeometry(0.52, 1.8, 0.52), towerMat);
+      tower.position.set(tx, ty + 0.9, tz); tower.castShadow = true; tower.frustumCulled = false;
+      const roof = new THREE.Mesh(new THREE.ConeGeometry(0.62, 0.55, 4), roofMat);
+      roof.position.set(tx, ty + 2.05, tz); roof.rotation.y = Math.PI / 4; roof.frustumCulled = false;
+      scene.add(tower, roof);
+    }
+    // 蕃部大寨：8 顶毡帐散落 + 一顶头人大帐，帐篷一律锥形合批
+    const rL = cityViews.luoyang.lib.half * 1.95 + 0.62;
+    const campMat = new THREE.MeshStandardMaterial({ roughness: 0.9 });
+    const tents = new THREE.InstancedMesh(new THREE.ConeGeometry(0.48, 0.85, 6), campMat, 8);
+    tents.castShadow = true;
+    const felt = new THREE.Color(0xc9baa0);
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2 + hash(i, 3) * 1.2;
+      const rr = rL + 1.05 + hash(i, 7) * 0.8;
+      const cl = state.cities.luoyang;
+      const px = cl.x + Math.cos(a) * rr, pz = cl.z + Math.sin(a) * rr;
+      dummy.position.set(px, heightAt(px, pz) + 0.42, pz);
+      dummy.rotation.set(0, hash(px, pz) * Math.PI, 0);
+      dummy.scale.set(1, 0.85 + hash(pz, px) * 0.3, 1);
+      dummy.updateMatrix();
+      tents.setMatrixAt(i, dummy.matrix);
+      tents.setColorAt(i, felt.clone().offsetHSL(0, 0, (hash(i, 11) - 0.5) * 0.14));
+    }
+    tents.instanceMatrix.needsUpdate = true;
+    if (tents.instanceColor) tents.instanceColor.needsUpdate = true;
+    tents.frustumCulled = false;
+    tents.name = 'qinghe-tents';   // 便于实机验证按名统计
+    scene.add(tents);
+    const bigTent = new THREE.Mesh(new THREE.ConeGeometry(0.95, 1.5, 8),
+      new THREE.MeshStandardMaterial({ color: 0xa8875c, roughness: 0.9 }));
+    {
+      const cl = state.cities.luoyang;
+      const bx = cl.x - rL - 1.45, bz = cl.z + 0.9;
+      bigTent.position.set(bx, heightAt(bx, bz) + 0.74, bz);
+      bigTent.castShadow = true; bigTent.frustumCulled = false;
+      scene.add(bigTent);
+    }
+  }
 
   // 阵营变更后刷新批次：faction 用实例色染阵营，旗面用零缩放隐藏非本阵营实例。
   function refreshFaction(s) {
@@ -1311,7 +1391,7 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
       // 名牌是 768×240 的 canvas 贴图：只在归属／兵力／选中态变化时重绘上传
       const labelKey = `${c.owner}|${c.troops}|${id === selectedId ? 1 : 0}`;
       if (v.labelKey !== labelKey) {
-        drawLabel(v.cv, c, id === selectedId);
+        drawLabel(v.cv, c, id === selectedId, foeChar);
         v.tex.needsUpdate = true;
         v.labelKey = labelKey;
       }
