@@ -692,8 +692,15 @@ export function createUI(root, state, opts = {}) {
     } catch (_) { /* 隐私模式 */ }
     if (finished) toast('引导已毕。点选州郡即可理政进军；<kbd>H</kbd> 略要，<kbd>↶</kbd> 悔棋。');
   }
-  function startGuide() {
+  function startGuide(tries = 0) {
     if (guideDone() || guideLayer) return;
+    // 玩家一进场就翻设置／撞上事件时，不要把引导盖在弹窗上：等它关掉再浮现
+    const modalOpen = !el.settingsModal.hidden || !el.helpModal.hidden || !el.savesModal.hidden
+      || !el.eventModal.hidden || !el.endModal.hidden;
+    if (modalOpen) {
+      if (tries < 20) setTimeout(() => startGuide(tries + 1), 400);
+      return;
+    }
     guideLayer = document.createElement('div');
     guideLayer.className = 'guide-scrim';
     guideLayer.setAttribute('role', 'dialog');
