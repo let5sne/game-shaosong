@@ -5,12 +5,16 @@ import { CITY_DEFS, RIVERS, riverBetween } from './data.js';
 import { supplyMap } from './rules.js';
 import {
   SONG_COLOR, JIN_COLOR, SONG_LIGHT, JIN_LIGHT, PAPER,
-  cityTier, buildCityLibrary, makeFlagTexture, makeWaterTexture,
-  makeLabelTexture, drawLabel, makeFlagMaterial,
-  pineGeometry, broadGeometry, rockGeometry, tentGeometry, mountainClusterGeometry, boulderGeometry, fieldGeometry,
+  cityTier, buildCityLibrary, buildCityGeometry, makeFlagTexture, makeWaterTexture,
+  makeLabelTexture, drawLabel, makeStatusTexture, drawStatus, makeFlagMaterial,
+  pineGeometry, broadGeometry, rockGeometry, tentGeometry, mountainClusterGeometry, boulderGeometry, fieldGeometry, litterGeometry,
   loadUnitLibrary, loadCapitalLibrary, loadTreeLibrary, TREE_MESHES, applyVerticalAO,
 } from './models.js';
-import { HOME_POSE } from './themes.js';
+import { HOME_POSE, VISTA_POSE } from './themes.js';
+import {
+  NEAR_LOD, nearFactor as lodNearFactor, detailFactor as lodDetailFactor,
+  labelScaleK as lodLabelScaleK, ringFadeK, statusVisible,
+} from './lod.js';
 import { createInkPass, makeContactInk, makeInkTexture } from './ink.js';
 
 const W = 116, D = 100, CX = -2, CZ = -3;
@@ -21,6 +25,9 @@ const FLAG_W = 1.56, FLAG_H = 0.98;
 // 两者都是 tier 2 重檐规格，故可共用同一套举折曲面参数。
 const CAPITAL_MESHES = { Kaifeng: 'kaifeng', Yanjing: 'yanjing' };
 const TENT_SLOTS = 6;
+// 长安是改编分支里唯一被放大展示的城：城周植被需留出更宽的清场圈，
+// 否则树冠会压在城门、寨栅与状态环上（其余 23 州沿用旧半径，全图基线不动）。
+const CHANGAN_DEF = CITY_DEFS.find(d => d.id === 'changan') || { x: -37, z: -16 };
 
 // ── 程序化噪声 ──────────────────────────────────────────────
 function hash(x, z) {
@@ -61,6 +68,21 @@ export function riverProximity(x, z) {
   let best = 10.24;                       // 3.2²，超出即无需精确值
   for (const r of RIVER_SAMPLES) {
     if (x < r.minX - 3.2 || x > r.maxX + 3.2 || z < r.minZ - 3.2 || z > r.maxZ + 3.2) continue;
+    for (let i = 0; i < r.pts.length; i += 2) {
+      const p = r.pts[i];
+      const d = (p.x - x) ** 2 + (p.z - z) ** 2;
+      if (d < best) best = d;
+    }
+  }
+  return Math.sqrt(best);
+}
+/**
+ * 河道真实距离（不封顶）。riverProximity 在 3.2 处截断，只适合做遮罩，
+ * 无法表达「远离水岸」这类 >3.2 的筛选；碎岩避水与单测都走这一份。
+ */
+export function riverDistance(x, z) {
+  let best = Infinity;
+  for (const r of RIVER_SAMPLES) {
     for (let i = 0; i < r.pts.length; i += 2) {
       const p = r.pts[i];
       const d = (p.x - x) ** 2 + (p.z - z) ** 2;
@@ -110,9 +132,49 @@ export function setTerrainStyle(style) {
   ACTIVE_FIELD = makeHeightField(style);
   return ACTIVE_FIELD ? style : 'classic';
 }
-export function heightAt(x, z) {
+
+/**
+ * 关中台地（纯渲染）：长安城周 9 单位内实测高差 7.18，城池像挤在峡谷里。
+ * 只在 heightAt 上做一圈平滑压平——rules.js / data.js 不引用 heightAt，
+ * 故津渡、补给与 balance 零回归；所有贴地物件仍共用同一份高度，不会彼此错位。
+ * 河谷用 riverProximity 留出下切通道，避免把黄河抬成台地上的一条蓝漆。
+ */
+export const CHANGAN_PLATEAU = Object.freeze({
+  x: CHANGAN_DEF.x, z: CHANGAN_DEF.z,
+  height: 1.85, inner: 6.5, outer: 16.5, strength: 0.80,  // 外圈止于洛阳（d=17.26）之前
+});
+export function changanPlateauWeight(x, z) {
+  const d = Math.hypot(x - CHANGAN_PLATEAU.x, z - CHANGAN_PLATEAU.z);
+  if (d >= CHANGAN_PLATEAU.outer) return 0;
+  const falloff = 1 - ramp(CHANGAN_PLATEAU.inner, CHANGAN_PLATEAU.outer, d);
+  return falloff * CHANGAN_PLATEAU.strength * ramp(0.9, 3.4, riverProximity(x, z));
+}
+/**
+ * 长安台地田垄（纯渲染，常驻）。台地压平 + 12 单位植被清场后，城周留下一块
+ * 浅米黄「秃平地」；补几块极淡条播田垄给平地一点方向感与人烟气。
+ * 每项 [dx, dz, scale] 是相对长安的偏移：位置全部避开黄河贴城段、坊格线刻、
+ * 渭水与灞桥，且 classic/paper/real 三档的四角高差都 < 0.75（运行时仍逐块复核）。
+ * 刻意**常驻**而非塞进 nearDetail：默认全景也要有方向感；
+ * ② 的取舍另说——默认全景彩环保持 0.85 不动，收敛只在拉近时发生。
+ */
+export const CHANGAN_FIELDS = Object.freeze([
+  [-1, -7, 1.6], [3, -7, 1.7], [5, -7, 1.6], [9, -6, 1.5], [11, -6, 1.6],
+  [7, -4, 1.6], [9, -4, 1.9], [11, -4, 1.7],
+]);
+/**
+ * 未压平的原始高度场：地质分区（分层配色、顶点 AO）以它为准。
+ * 台地只压平几何，不该把一整圈山色换成 HD_LAYERS 里 1.85 那条亮绿带，
+ * 否则默认全景会出现边界整齐的「绿圆斑」。台地外 raw === heightAt，
+ * 故其余 23 州的配色与 AO 逐点不变。
+ */
+export function rawHeightAt(x, z) {
   const base = baseHeightAt(x, z);
   return ACTIVE_FIELD ? ACTIVE_FIELD(x, z, base) : base;
+}
+export function heightAt(x, z) {
+  const raw = rawHeightAt(x, z);
+  const w = changanPlateauWeight(x, z);
+  return w > 0 ? raw + (CHANGAN_PLATEAU.height - raw) * w : raw;
 }
 
 // ── 地形分层着色：雪线／山岩／草甸／农田／河滩，含等高线与田垄 ──
@@ -223,6 +285,17 @@ const HD_BIOME = {
   paper: { scrub: 0x6d8a63, scree: 0xc9c4ae, meadow: 0xa7b979 },
   real: { scrub: 0x4f7135, scree: 0xdedbc8, meadow: 0xa3b055 },
 };
+/**
+ * 高清档陡坡碎岩的分档参数（纯数据，可单测）。real 档刻意收敛：原 tint
+ * 0xf2f0e8 + scale 2.6~4.4 + 浅埋在暖主光下读成「白色纸片／地形破面」，
+ * 靠水那块最突兀；paper 档保持原版逐字观感，方便像素 A/B。
+ * water 是到河道的最小距离：real 用不截断的 riverDistance，paper 沿用
+ * 在 3.2 处封顶的 riverProximity，故两档阈值不可直接比较。
+ */
+export const BOULDER_PARAMS = Object.freeze({
+  paper: Object.freeze({ tint: 0xe4dfcc, base: 2.1, span: 1.8, sink: 0.34, subSink: 0.40, water: 3.0, chance: 0.13 }),
+  real: Object.freeze({ tint: 0xc4c0ac, base: 1.8, span: 1.2, sink: 0.52, subSink: 0.58, water: 5.0, chance: 0.18 }),
+});
 
 /**
  * 地形顶点环境光遮蔽：在已生成的高度网格上取 8 方向 × 2 半径的邻域高差，
@@ -414,6 +487,59 @@ function ribbonGeometry(points, halfWidth, lift, hex, uvScale = 0, minY = -Infin
   g.computeVertexNormals();
   return g;
 }
+// ── 寨内近观：一条带状几何同时承载「深度渐变 + 碎浪线」 ──────
+// 7 个横向采样点，最外一圈写纸白，向内浅沙 → 浅青 → 中流深青。
+// 全部塞进已有的 surfaces 合并网格：浪线零新增 mesh / draw call / program。
+const VISTA_ACROSS = Object.freeze([-1, -0.92, -0.66, 0, 0.66, 0.92, 1]);
+const VISTA_STOPS = Object.freeze([
+  { s: 0.00, c: new THREE.Color(0x76a19b) },
+  { s: 0.66, c: new THREE.Color(0xa9c6b8) },
+  { s: 0.92, c: new THREE.Color(0xd8d2b6) },
+  { s: 1.00, c: new THREE.Color(0xf4f1e6) },
+]);
+function vistaWaterColor(absS, out) {
+  for (let i = 1; i < VISTA_STOPS.length; i++) {
+    const a = VISTA_STOPS[i - 1], b = VISTA_STOPS[i];
+    if (absS <= b.s || i === VISTA_STOPS.length - 1) {
+      const t = Math.max(0, Math.min(1, (absS - a.s) / (b.s - a.s)));
+      return out.copy(a.c).lerp(b.c, t);
+    }
+  }
+  return out.copy(VISTA_STOPS[0].c);
+}
+function waterRibbonGeometry(points, halfWidth, lift, minY) {
+  const verts = [], cols = [], uvs = [], idx = [];
+  const col = new THREE.Color();
+  const n = points.length, k = VISTA_ACROSS.length;
+  for (let i = 0; i < n; i++) {
+    const p = points[i];
+    const prev = points[Math.max(0, i - 1)], next = points[Math.min(n - 1, i + 1)];
+    const dx = next.x - prev.x, dz = next.z - prev.z;
+    const len = Math.hypot(dx, dz) || 1;
+    const nx = -dz / len, nz = dx / len;
+    // 与既有 flatAcross 语义一致：整条河带按中心线高度铺平，两侧不各自贴坡
+    const centerY = Math.max(minY, heightAt(p.x, p.z) + lift);
+    for (const s of VISTA_ACROSS) {
+      verts.push(p.x + nx * halfWidth * s, centerY, p.z + nz * halfWidth * s);
+      vistaWaterColor(Math.abs(s), col);
+      cols.push(col.r, col.g, col.b);
+      uvs.push(s > 0 ? 0 : 1, 0);
+    }
+    if (i < n - 1) {
+      const a = i * k;
+      for (let j = 0; j < k - 1; j++)
+        idx.push(a + j, a + k + j, a + j + 1, a + j + 1, a + k + j, a + k + j + 1);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(new Float32Array(verts.length), 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
 function mergeAll(list) {
   const g = mergeGeometries(list, false);
   list.forEach(x => x.dispose());
@@ -552,7 +678,7 @@ function makeSunGlow() {
 }
 
 // ── 主场景 ──────────────────────────────────────────────────
-export function createWorld(container, state, { onPick, quality = 'high', reducedMotion = false, ink = false, atmos = false, tex = false, ctex = false, units = true, capitals = true, trees = true, terrain = 'classic', mat = true } = {}) {
+export function createWorld(container, state, { onPick, quality = 'high', reducedMotion = false, ink = false, atmos = false, vista = false, tex = false, ctex = false, units = true, capitals = true, trees = true, terrain = 'classic', mat = true } = {}) {
   // 地貌档必须先绑定再生成任何几何：全场景的贴地落点都由 heightAt() 分派。
   const low = quality === 'low';            // 低配：DPR 封顶、关阴影、植被采样减半
   let terrainStyle = setTerrainStyle(TERRAIN_STYLES.includes(terrain) ? terrain : 'classic');
@@ -584,7 +710,10 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
 
   // 局内默认机位按剧本取：清河的战场只在西北一角，首镜便给近景；
   // 读取放在调用时（而非建 world 时），开场页同会话换剧本再进局也能取对。
-  const homePose = () => HOME_POSE[state.scenarioId] || HOME_POSE.default;
+  // vista 只压近清河关的首镜；长局／顺昌／郾城仍走 HOME_POSE，全图基线不动。
+  const homePose = () => (vista && state.scenarioId === 'qinghe')
+    ? VISTA_POSE
+    : (HOME_POSE[state.scenarioId] || HOME_POSE.default);
   const camera = new THREE.PerspectiveCamera(46, container.clientWidth / container.clientHeight, 0.1, 600);
   {
     const h = homePose();
@@ -609,7 +738,7 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
   controls.target.fromArray(homePose().target);
   controls.enableDamping = true;
   controls.dampingFactor = 0.075;
-  controls.minDistance = 34;
+  controls.minDistance = vista ? 16 : 34;   // 近观首镜距离 30，需放宽下限否则会被推远
   controls.maxDistance = 185;
   controls.minPolarAngle = 0.18;
   controls.maxPolarAngle = 1.36;
@@ -693,7 +822,13 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
   if (hd) {
     geo.computeVertexNormals();
     const nr = geo.attributes.normal;
-    const aoField = matOn ? computeTerrainAO(gp, HD_SEG_X, HD_SEG_Z) : null;
+    // 着色用的「地质高度」用未压平的原始场：几何压平只为让城不挤在峡谷里，
+    // 配色与 AO 若跟着用压平后的 y，台地会整片染成同一条色带，形成圆形贴片。
+    // 台地外 shadeY === gp.y，且 AO 逐点等于旧版，故全图基线不受牵连。
+    const shadeY = new Float32Array(gp.count);
+    for (let i = 0; i < gp.count; i++) shadeY[i] = rawHeightAt(gp.getX(i), gp.getZ(i));
+    const aoField = matOn ? computeTerrainAO(
+      { count: gp.count, getY: i => shadeY[i] }, HD_SEG_X, HD_SEG_Z) : null;
     let aoMean = 0;
     if (aoField) {
       for (let i = 0; i < aoField.length; i++) aoMean += aoField[i];
@@ -703,16 +838,20 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
     let baseSum = 0, matSum = 0;
     for (let i = 0; i < gp.count; i++) {
       const x = gp.getX(i), y = gp.getY(i), z = gp.getZ(i);
+      const sh = shadeY[i];
+      // shadeY 与 gp.y 都是 float32；台地内几何被改过，两者必不相等。
+      // 亮度锚 k 只累计非台地顶点，避免修正区的配色反过来缩放整幅地图。
+      const inPlateau = sh !== y;
       const nx = nr.getX(i), ny = nr.getY(i), nz = nr.getZ(i);
       // 同一点再算一次旧配色，只用来求亮度锚：质感层不许改变整幅地图的平均明度
-      if (matOn) {
+      if (matOn && !inPlateau) {
         const base = terrainColorHD(y, x, z, nx, ny, nz, terrainStyle);
         baseSum += base.r + base.g + base.b;
       }
-      const col = terrainColorHD(y, x, z, nx, ny, nz, terrainStyle,
+      const col = terrainColorHD(sh, x, z, nx, ny, nz, terrainStyle,
         { material: matOn, ao: aoField ? aoField[i] : 0, aoMean });
       colors[i * 3] = col.r; colors[i * 3 + 1] = col.g; colors[i * 3 + 2] = col.b;
-      matSum += col.r + col.g + col.b;
+      if (!inPlateau) matSum += col.r + col.g + col.b;
     }
     if (matOn && matSum > 0) {
       const k = baseSum / matSum;
@@ -802,11 +941,29 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
 
   // ── 海面 + 流动波光 ──
   // 起伏放到 vertex shader：原先每帧在 CPU 改 957 个顶点并重传整个 VBO
-  const seaGeo = new THREE.PlaneGeometry(W, D, 32, 28);
+  const seaGeo = new THREE.PlaneGeometry(W, D, vista ? 64 : 32, vista ? 56 : 28);
   seaGeo.rotateX(-Math.PI / 2);
   seaGeo.translate(CX, WATER_Y, CZ);
+  if (vista) {
+    // 水深 = 水面 − 该处陆面高度：近岸差小（浅沙），外海差大（深青）。
+    // 顶点色是一次性生成，不逐帧重算；陆上部分反正被地形挡住。
+    const pos = seaGeo.attributes.position;
+    const cols = new Float32Array(pos.count * 3);
+    const shallow = new THREE.Color(0xd8d2b6), mid = new THREE.Color(0xa9c6b8), deep = new THREE.Color(0x6f9692);
+    const c = new THREE.Color();
+    for (let i = 0; i < pos.count; i++) {
+      const depth = WATER_Y - heightAt(pos.getX(i), pos.getZ(i));
+      if (depth < 0.9) c.copy(shallow).lerp(mid, ramp(0.05, 0.9, depth));
+      else c.copy(mid).lerp(deep, ramp(0.9, 3.2, depth));
+      cols[i * 3] = c.r; cols[i * 3 + 1] = c.g; cols[i * 3 + 2] = c.b;
+    }
+    seaGeo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+  }
   const seaMat = new THREE.MeshStandardMaterial({
-    color: 0x89aeb6, transparent: true, opacity: 0.82, roughness: 0.30, metalness: 0.10,
+    // vertexColors 只替换这一个材质已有的 program 变体，不新增 shader；
+    // 关闭时逐字回到原来的单色 0x89aeb6。
+    color: vista ? 0xffffff : 0x89aeb6, vertexColors: !!vista,
+    transparent: true, opacity: 0.82, roughness: 0.30, metalness: 0.10,
     depthWrite: false, side: THREE.DoubleSide,
   });
   seaMat.onBeforeCompile = shader => {
@@ -820,11 +977,12 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
   };
   seaMat.customProgramCacheKey = () => 'shaosong-sea-wave';
   const sea = new THREE.Mesh(seaGeo, seaMat);
+  sea.name = 'water.sea';
   sea.renderOrder = 1;
   scene.add(sea);
-  const waterTexSea = makeWaterTexture();
+  const waterTexSea = makeWaterTexture(vista);
   waterTexSea.repeat.set(7, 7);
-  const waterTexRiver = makeWaterTexture();
+  const waterTexRiver = makeWaterTexture(vista);
   waterTexRiver.repeat.set(1, 1);
   const shimmerGeo = new THREE.PlaneGeometry(W, D, 1, 1);
   shimmerGeo.rotateX(-Math.PI / 2);
@@ -832,16 +990,31 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
   const shimmer = new THREE.Mesh(shimmerGeo, new THREE.MeshBasicMaterial({
     map: waterTexSea, transparent: true, opacity: 0.20, depthWrite: false, side: THREE.DoubleSide,
   }));
+  shimmer.name = 'water.shimmer';
   shimmer.renderOrder = 2;
   scene.add(shimmer);
 
   // ── 河流：湿岸 → 水面 → 流动高光 ──
   const banks = [], surfaces = [], glints = [];
-  const riverLinePts = RIVER_SAMPLES.map(r => r.curve.getPoints(180));
+  const riverLinePts = RIVER_SAMPLES.map(r => {
+    const pts = r.curve.getPoints(180);
+    // 黄河贴城段只挪「渲染采样点」：让水带视觉上绕开长安城台，缓解「黄河穿城门」。
+    // RIVER_SAMPLES / riverProximity / riverBetween 一字不动，津渡与补给判定零回归。
+    if (r.def.id === 'huanghe') {
+      const ch = CITY_DEFS.find(d => d.id === 'changan');
+      if (ch) for (const p of pts) {
+        const d = Math.hypot(p.x - ch.x, p.z - ch.z);
+        if (d < 9) p.z -= smooth(1 - d / 9) * 1.8;
+      }
+    }
+    return pts;
+  });
   for (let ri = 0; ri < RIVER_SAMPLES.length; ri++) {
     const r = RIVER_SAMPLES[ri], pts = riverLinePts[ri], hw = r.def.width;
     banks.push(ribbonGeometry(pts, hw * 1.62, 0.015, 0xa9a184, 0, WATER_Y - 0.08, true));
-    surfaces.push(ribbonGeometry(pts, hw, 0.05, r.def.color, 0, WATER_Y + 0.01, true));
+    surfaces.push(vista
+      ? waterRibbonGeometry(pts, hw, 0.05, WATER_Y + 0.01)
+      : ribbonGeometry(pts, hw, 0.05, r.def.color, 0, WATER_Y + 0.01, true));
     glints.push(ribbonGeometry(pts, hw * 0.94, 0.075, 0xffffff, 0.16, WATER_Y + 0.03, true));
   }
   const matTape = (hex, opacity) => new THREE.MeshStandardMaterial({
@@ -851,6 +1024,7 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
   const bankMesh = new THREE.Mesh(mergeAll(banks), matTape(0xffffff, 0.55));
   bankMesh.renderOrder = 2; scene.add(bankMesh);
   const riverMesh = new THREE.Mesh(mergeAll(surfaces), matTape(0xffffff, 0.92));
+  riverMesh.name = 'water.river';
   riverMesh.renderOrder = 3; scene.add(riverMesh);
   const glintMesh = new THREE.Mesh(mergeAll(glints), new THREE.MeshBasicMaterial({
     map: waterTexRiver, vertexColors: true, transparent: true, opacity: 0.62,
@@ -875,6 +1049,9 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
       const pts = curve.getPoints(28);
       const ford = riverBetween(c, t);
       (ford ? fordEdge : roadEdge).push(ribbonGeometry(pts, ford ? 0.44 : 0.31, 0.10, ford ? 0x2d6183 : 0x877454));
+      // 津渡亮蓝水带原本是硬边矩形贴片：补一层中间宽度的浅蓝过渡带，
+      // 合并进同一批次（0 新增 draw call），读作水色渐隐而非塑料贴纸。
+      if (ford) fordEdge.push(ribbonGeometry(pts, 0.38, 0.112, 0x8fc4d8));
       (ford ? fordBody : roadBody).push(ribbonGeometry(pts, ford ? 0.30 : 0.20, 0.125, ford ? 0x63b6dd : 0xc4ad82));
     }
   }
@@ -984,6 +1161,54 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
     scene.add(fieldIm);
   }
 
+  // ── 长安台地极淡田垄线刻：给压平后的秃平地一点方向感 ──
+  // 试过两版「淡色田面贴片」都不成立：矩形面片无论怎么调色都会与动态地表色错开，
+  // 先读成空白贴片，去掉田埂后又成浅色补丁。改走与坊格同源的贴地平行线刻：
+  // 只留条播方向，无色块、无外框、不挑地貌档。常驻层，+1 draw call。
+  {
+    const furrows = [];
+    let beds = 0;
+    // 全簇同向且与地形等高线斜交：顺着等高线走会被读成天然山纹，人工条播才立得住
+    const furrowAngle = -0.52;
+    const ux = Math.cos(furrowAngle), uz = Math.sin(furrowAngle);
+    const nx = -uz, nz = ux;
+    for (const [dx, dz, scale] of CHANGAN_FIELDS) {
+      const px = CHANGAN_PLATEAU.x + dx, pz = CHANGAN_PLATEAU.z + dz;
+      if (riverDistance(px, pz) < 3.0) continue;             // 不泡黄河
+      const hx = 0.55 * scale, hz = 0.38 * scale;
+      const corners = [
+        heightAt(px - hx, pz - hz), heightAt(px + hx, pz - hz),
+        heightAt(px - hx, pz + hz), heightAt(px + hx, pz + hz),
+      ];
+      const relief = Math.max(...corners) - Math.min(...corners);
+      if (corners[0] < 0.55 || relief > 0.75) continue;         // 不落进水面/陡坡
+      const halfL = 0.55 * scale, halfW = 0.34 * scale;
+      for (let j = 0; j < 6; j++) {
+        const off = -halfW + (2 * halfW) * (j + 0.5) / 6;
+        for (let s = 0; s < 8; s++) {
+          const t0 = -halfL + (2 * halfL) * s / 8;
+          const t1 = -halfL + (2 * halfL) * (s + 1) / 8;
+          const x0 = px + ux * t0 + nx * off, z0 = pz + uz * t0 + nz * off;
+          const x1 = px + ux * t1 + nx * off, z1 = pz + uz * t1 + nz * off;
+          furrows.push(
+            x0, heightAt(x0, z0) + 0.10, z0,
+            x1, heightAt(x1, z1) + 0.10, z1);
+        }
+      }
+      beds++;
+    }
+    const fGeo = new THREE.BufferGeometry();
+    fGeo.setAttribute('position', new THREE.Float32BufferAttribute(furrows, 3));
+    const furrowLines = new THREE.LineSegments(fGeo, new THREE.LineBasicMaterial({
+      color: 0x7a6c52, transparent: true, opacity: 0.46, depthWrite: false,
+    }));
+    furrowLines.renderOrder = 4;
+    furrowLines.frustumCulled = false;
+    furrowLines.name = 'changan.farmland';
+    furrowLines.userData.beds = beds;
+    scene.add(furrowLines);
+  }
+
   // ── 远山 ──
   // classic：12 个低多边形锥柱剪影（原味）。
   // 高清档：3 层环形连续山脊，任意视角都有远近层次与大气透视。
@@ -1027,7 +1252,11 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
       const pz = z + (hash(z + 7, x) - 0.5) * 1.5;
       const h = heightAt(px, pz);
       if (h < 0.82 || h > (hd ? 11.5 : 8.2) || px > 39) continue;
-      if (cityDistance(px, pz) < 5.4 || riverProximity(px, pz) < 2.5) continue;
+      // 长安清场半径放宽，并对 12~18 的环带按距离压低树高：
+      // 8.4 之外的树在低机位仍会以大冠幅挡住整座城，这是「相机侧遮挡」的主要来源。
+      const dCh = Math.hypot(px - CHANGAN_DEF.x, pz - CHANGAN_DEF.z);
+      const clearR = dCh < 14 ? 12 : 5.4;
+      if (cityDistance(px, pz) < clearR || riverProximity(px, pz) < 2.5) continue;
       const n = fbm(px * 0.09 + 33, pz * 0.09 + 21);
       const roll = hash(px * 3.1, pz * 2.7);
       let density = 0;
@@ -1037,7 +1266,8 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
       density = Math.min(0.72, density);
       if (roll > density) continue;
       const y = heightAt(px, pz);
-      const scale = 0.62 + hash(px + 11, pz - 4) * 0.82;
+      let scale = 0.62 + hash(px + 11, pz - 4) * 0.82;
+      if (dCh < 18) scale *= 0.55 + 0.45 * ramp(12, 18, dCh);
       const rot = hash(px - 5, pz + 9) * Math.PI * 2;
       const base = h > 3.4 ? (hash(px + 2, pz + 3) > 0.78 ? 'rock' : 'pine')
         : h > 2.1 ? (hash(px + 2, pz + 3) > 0.42 ? 'pine' : 'broad')
@@ -1106,26 +1336,31 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
   }
 
   // ── 高清档：陡坡碎岩 ──
-  // 参考图里近景白色裸岩是最强的尺度参照，程序化高度场本身给不了「硬边」。
-  // 只在坡度 >0.30 且远离城池/河道处稀疏散布，两套变体各 1 个 draw call。
+  // 硬边岩块给程序化高度场补尺度参照，两套变体各 1 个 draw call。
+  // real 档原先 tint=0xf2f0e8 + scale 2.6~4.4 + 浅埋，在暖主光下读成几块
+  // 「白色纸片／地形破面」，靠水那块最突兀；这里收敛为灰白湿岩、缩小多埋、
+  // 并把避水半径从截断的 3.2 放宽到精确 5.0。paper 档逐字保持原观感。
   if (hd) {
+    const rockReal = terrainStyle === 'real';
+    const BP = BOULDER_PARAMS[rockReal ? 'real' : 'paper'];
     const rocks = [[], []];
     for (let x = -54; x <= 44; x += 5.2) {
       for (let z = -46; z <= 42; z += 5.2) {
         const px = x + (hash(x, z) - 0.5) * 3.2;
         const pz = z + (hash(z + 9, x - 3) - 0.5) * 3.2;
-        if (px > 38 || cityDistance(px, pz) < 7.2 || riverProximity(px, pz) < 3.0) continue;
+        if (px > 38 || cityDistance(px, pz) < 7.2
+          || (rockReal ? riverDistance(px, pz) < BP.water : riverProximity(px, pz) < BP.water)) continue;
         const h = heightAt(px, pz);
         if (h < 1.7 || h > 11.5) continue;
         const d = 1.0;
         const sx = (heightAt(px + d, pz) - heightAt(px - d, pz)) / (2 * d);
         const sz = (heightAt(px, pz + d) - heightAt(px, pz - d)) / (2 * d);
         if (Math.hypot(sx, sz) < 0.45) continue;                 // 只在真正的陡坡
-        if (hash(px * 3.7 + 5, pz * 1.9 - 2) > (terrainStyle === 'real' ? 0.18 : 0.13)) continue;
+        if (hash(px * 3.7 + 5, pz * 1.9 - 2) > BP.chance) continue;
         const variant = hash(px - 7, pz + 11) > 0.5 ? 1 : 0;
-        const main = (terrainStyle === 'real' ? 2.6 : 2.1) + hash(px + 13, pz + 4) * 1.8;
+        const main = BP.base + hash(px + 13, pz + 4) * BP.span;
         const rot = hash(px - 2, pz + 8) * Math.PI * 2;
-        rocks[variant].push({ x: px, y: h, z: pz, scale: main, rot, sink: 0.34 });
+        rocks[variant].push({ x: px, y: h, z: pz, scale: main, rot, sink: BP.sink });
         // 半数点位带一块小副岩，形成嶙峋岩簇而非孤立的规则多面体
         if (hash(px + 31, pz - 6) > 0.45) {
           const ox = px + (hash(px + 3, pz + 2) - 0.5) * 3.4;
@@ -1133,13 +1368,13 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
           rocks[1 - variant].push({
             x: ox, y: heightAt(ox, oz), z: oz,
             scale: main * (0.46 + hash(ox, oz) * 0.24),
-            rot: rot + 1.1, sink: 0.40,
+            rot: rot + 1.1, sink: BP.subSink,
           });
         }
       }
     }
     const rockMat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1 });
-    const tint = new THREE.Color(terrainStyle === 'real' ? 0xf2f0e8 : 0xe4dfcc);
+    const tint = new THREE.Color(BP.tint);
     rocks.forEach((list, i) => {
       const im = new THREE.InstancedMesh(boulderGeometry(i), rockMat, Math.max(1, list.length));
       list.forEach((p, j) => {
@@ -1263,6 +1498,18 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
     label.renderOrder = 20;
     g.add(label);
 
+    // 近景状态朱签：默认不进渲染队列，只在近景且有状态时显现，远景零 draw call 增量。
+    const { cv: statusCv, tex: statusTex } = makeStatusTexture();
+    // 深度测试开启：朱签不再无条件盖在望楼顶上，靠前的木构可自然遮住它
+    const statusMark = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: statusTex, transparent: true, depthTest: true, depthWrite: false,
+    }));
+    statusMark.scale.set(2.6, 0.65, 1);
+    statusMark.position.set((8.0 + 2.6) / 2 + 0.22, lib.height + 2.35, 0);
+    statusMark.renderOrder = 19;
+    statusMark.visible = false;
+    g.add(statusMark);
+
     const rIn = lib.half * 1.95 + 0.62;
     const influence = groundRingAbs(c.x, c.z, rIn, rIn + 0.26, c.owner === 'song' ? SONG_COLOR : JIN_COLOR, 0.32);
     scene.add(influence);
@@ -1290,7 +1537,10 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
     hitMeshes.push(hit);
 
     cityRoot.add(g);
-    cityViews[c.id] = { group: g, label, cv, tex, influence, selRing, reachRing, stationRing, isoRing, goalRing, def, lib };
+    cityViews[c.id] = {
+      group: g, label, cv, tex, statusMark, statusCv, statusTex,
+      influence, selRing, reachRing, stationRing, isoRing, goalRing, def, lib,
+    };
   }
   for (const b of solidBatches) b.im.instanceMatrix.needsUpdate = true;
   for (const b of factionBatches) b.im.instanceMatrix.needsUpdate = true;
@@ -1324,17 +1574,35 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
     stakes.frustumCulled = false;
     stakes.name = 'qinghe-palisade';   // 便于实机验证按名统计
     scene.add(stakes);
-    const towerMat = new THREE.MeshStandardMaterial({ color: 0x71543a, roughness: 0.9 });
-    const roofMat = new THREE.MeshStandardMaterial({ color: 0x59503f, roughness: 0.95 });
-    for (const ang of [Math.PI / 2, Math.PI * 1.5]) {
-      const cq = state.cities.changan;
-      const tx = cq.x + Math.cos(ang) * rQ, tz = cq.z + Math.sin(ang) * rQ, ty = heightAt(tx, tz);
-      const tower = new THREE.Mesh(new THREE.BoxGeometry(0.52, 1.8, 0.52), towerMat);
-      tower.position.set(tx, ty + 0.9, tz); tower.castShadow = true; tower.frustumCulled = false;
-      const roof = new THREE.Mesh(new THREE.ConeGeometry(0.62, 0.55, 4), roofMat);
-      roof.position.set(tx, ty + 2.05, tz); roof.rotation.y = Math.PI / 4; roof.frustumCulled = false;
-      scene.add(tower, roof);
+
+    // 22 根孤桩原先读作散立木桩：补两道横枋连成寨墙，东面缺口立寨门迎官道。
+    const railParts = [];
+    const rail = (p, q, up, thick) => {
+      const dx = q.x - p.x, dz = q.z - p.z, len = Math.hypot(dx, dz);
+      if (len > 1.8) return;                     // 寨门缺口不连
+      const g = new THREE.BoxGeometry(len, thick, 0.09);
+      g.rotateY(-Math.atan2(dz, dx));
+      g.translate((p.x + q.x) / 2, (p.y + q.y) / 2 + up, (p.z + q.z) / 2);
+      railParts.push(g);
+    };
+    for (let i = 0; i < ringQ.length - 1; i++) {
+      rail(ringQ[i], ringQ[i + 1], 0.78, 0.09);
+      rail(ringQ[i], ringQ[i + 1], 0.36, 0.07);
     }
+    const gx = state.cities.changan.x + rQ, gz = state.cities.changan.z;
+    const gy = heightAt(gx, gz);
+    for (const dz of [-0.9, 0.9])
+      railParts.push(new THREE.BoxGeometry(0.28, 1.7, 0.28).translate(gx, gy + 0.85, gz + dz));
+    railParts.push(new THREE.BoxGeometry(0.24, 0.20, 2.2).translate(gx, gy + 1.75, gz));
+    railParts.push(new THREE.BoxGeometry(0.10, 1.25, 0.75).translate(gx, gy + 0.65, gz + 0.55));
+    const rails = new THREE.Mesh(mergeAll(railParts), stakeMat);
+    rails.castShadow = true;
+    rails.frustumCulled = false;
+    rails.name = 'qinghe-palisade-rails';
+    scene.add(rails);
+
+    // 望楼改由「长安近景增量层」生成木构干栏式（见下），此处不再放常驻方盒塔，
+    // 避免两套望楼在近景叠在一起。寨栅与蕃帐仍常驻，长局基线不受影响。
     // 蕃部大寨：8 顶毡帐散落 + 一顶头人大帐，帐篷一律锥形合批
     const rL = cityViews.luoyang.lib.half * 1.95 + 0.62;
     const campMat = new THREE.MeshStandardMaterial({ roughness: 0.9 });
@@ -1611,11 +1879,360 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
   renderer.domElement.addEventListener('pointerup', onUp);
   renderer.domElement.addEventListener('pointermove', onMove);
 
+  // ── 近景 LOD：按「相机到视点距离」收束装饰层 ──────────────
+  // 阈值迁到 lod.js（纯函数，可单测）。关键约束：清河关默认机位 dist≈62.3、
+  // 长局≈130 都必须是「完全远景」——旧 near=62/far=96 曾把默认全景判成近景，
+  // 全图环带被静默淡到 0.119，而实机断言只查 .visible 因而漏检。
+  let nearDetail = null;          // 长安近景增量层（故城符号／木构望楼／瓦垄罩）
+  const nearFadeMats = [];        // { mat, base }：随 detailFactor 渐显，远景整层退出渲染队列
+  const camDistance = () => camera.position.distanceTo(controls.target);
+  function nearFactor() { return lodNearFactor(camDistance()); }
+  function detailFactor() { return lodDetailFactor(camDistance()); }
+  function labelScaleK() { return lodLabelScaleK(nearFactor(), presentation); }
+  function syncLabelScales() {
+    const k = labelScaleK();
+    for (const id in cityViews) {
+      const v = cityViews[id];
+      v.label.scale.set(8.0 * k, 2.50 * k, 1);
+      // 朱签缩到名牌的六成，侧挂在名牌右端（按当前名牌宽度实时算，
+      // 过渡段也不会互相压叠），不再横压望楼与屋顶。
+      v.statusMark.scale.set(2.6, 0.65, 1);
+      v.statusMark.position.x = (v.label.scale.x + 2.6) / 2 + 0.22;
+      v.statusMark.position.y = v.lib.height + 2.35;
+    }
+  }
+
+  // ── 长安近景增量层：京兆故城符号 ────────────────────────────
+  // 「长安」之名在改编分支里借给清河寨，但史实预期不该被凭空唤起又不兑现：
+  // 近景补一组极淡的故城符号（旧城台地、渭水、坊格残垣、灞桥）。
+  // 不改 heightAt／RIVERS 控制点（那会牵动全图落点与津渡判定），
+  // 整层远景退出渲染队列，故全图机位的像素 A/B 与既有断言逐字不变。
+  {
+    const ch = CITY_DEFS.find(d => d.id === 'changan');
+    if (ch) {
+      nearDetail = new THREE.Group();
+      nearDetail.name = 'changan.nearDetail';
+      nearDetail.visible = false;
+      scene.add(nearDetail);
+      const addFade = (mat, base) => { nearFadeMats.push({ mat, base }); return mat; };
+      const basic = (o, extra = {}) => addFade(new THREE.MeshBasicMaterial({
+        transparent: true, opacity: o, depthWrite: false, side: THREE.DoubleSide, ...extra,
+      }), o);
+
+      // ⓪ 寨内近观：地被散点 + 河面浮叶。只在 vista 开启时生成，
+      // 且整层继承 nearDetail 的远景退出队列，故全景机位零增量。
+      // 不透明小实体而非 alpha 草片：近景要高频碎细节，但不吃半透明 overdraw。
+      if (vista) {
+        const roadSegs = [];
+        for (const c of CITY_DEFS) for (const id of c.links) {
+          const t = CITY_DEFS.find(x => x.id === id);
+          if (t) roadSegs.push([c.x, c.z, t.x, t.z]);
+        }
+        const segDist = (px, pz, [x0, z0, x1, z1]) => {
+          const dx = x1 - x0, dz = z1 - z0, L2 = dx * dx + dz * dz;
+          const t = L2 ? Math.max(0, Math.min(1, ((px - x0) * dx + (pz - z0) * dz) / L2)) : 0;
+          return Math.hypot(px - (x0 + dx * t), pz - (z0 + dz * t));
+        };
+        const tufts = [];
+        for (let i = 0; i < 1400 && tufts.length < 520; i++) {
+          const a = hash(i * 1.37 + 3, i * 2.11 - 7) * Math.PI * 2;
+          const r = 4.8 + Math.sqrt(hash(i * 3.9 + 7, i * 1.7 - 5)) * 9.5;
+          const px = ch.x + Math.cos(a) * r, pz = ch.z + Math.sin(a) * r;
+          if (cityDistance(px, pz) < 4.6 || riverProximity(px, pz) < 1.7) continue;
+          if (roadSegs.some(s => segDist(px, pz, s) < 0.55)) continue;
+          const h = heightAt(px, pz);
+          if (h < 0.62) continue;
+          const d = 0.30;
+          const hs = [heightAt(px - d, pz), heightAt(px + d, pz), heightAt(px, pz - d), heightAt(px, pz + d)];
+          if (Math.max(...hs) - Math.min(...hs) > 0.55) continue;   // 陡坡上不铺，避免浮空
+          tufts.push({ x: px, y: h + 0.02, z: pz,
+            rot: hash(px, pz) * Math.PI * 2, scale: 0.8 + hash(px * 1.7, pz * 2.3) * 0.9,
+            t: hash(px * 2.9, pz * 1.3) });
+        }
+        const litterMat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1 });
+        const litter = new THREE.InstancedMesh(litterGeometry(), litterMat, Math.max(1, tufts.length));
+        const tint = new THREE.Color(), pale = new THREE.Color(0xffffff), dusk = new THREE.Color(0xd9d2b8);
+        tufts.forEach((p, i) => {
+          dummy.rotation.set(0, p.rot, 0);
+          dummy.position.set(p.x, p.y, p.z);
+          dummy.scale.setScalar(p.scale);
+          dummy.updateMatrix();
+          litter.setMatrixAt(i, dummy.matrix);
+          litter.setColorAt(i, tint.copy(pale).lerp(dusk, p.t * 0.5));
+        });
+        dummy.scale.setScalar(1); dummy.rotation.set(0, 0, 0);
+        litter.instanceMatrix.needsUpdate = true;
+        if (litter.instanceColor) litter.instanceColor.needsUpdate = true;
+        litter.count = tufts.length;
+        litter.frustumCulled = false;
+        litter.name = 'vista.groundLitter';
+        litter.receiveShadow = true;
+        nearDetail.add(litter);
+
+        // 浮叶贴着黄河贴城段：河带是 flatAcross，高度取中心线 heightAt+0.05，
+        // 故叶片必须按同一基准抬 0.085，否则会沉进被抬高的河面里。
+        const hIdx = Math.max(0, RIVER_SAMPLES.findIndex(r => r.def.id === 'huanghe'));
+        const hp = riverLinePts[hIdx], hw = RIVER_SAMPLES[hIdx].def.width;
+        const leafGeo = new THREE.PlaneGeometry(0.26, 0.16);
+        leafGeo.rotateX(-Math.PI / 2);
+        const leafMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, side: THREE.DoubleSide });
+        const leaves = [];
+        for (let i = 1; i < hp.length - 1; i++) {
+          const p = hp[i];
+          if (Math.hypot(p.x - ch.x, p.z - ch.z) > 15) continue;
+          for (let j = 0; j < 2; j++) {
+            const t = hash(p.x * 2.1 + j, p.z * 3.7 - j);
+            const dx = hp[i + 1].x - hp[i - 1].x, dz = hp[i + 1].z - hp[i - 1].z;
+            const len = Math.hypot(dx, dz) || 1;
+            const off = (t - 0.5) * hw * 1.15;
+            const x = p.x - dz / len * off, z = p.z + dx / len * off;
+            leaves.push({ x, z, y: Math.max(WATER_Y + 0.06, heightAt(x, z) + 0.085),
+              rot: t * Math.PI * 2, k: hash(p.z + j, p.x - j) });
+          }
+        }
+        const leafIm = new THREE.InstancedMesh(leafGeo, leafMat, Math.max(1, leaves.length));
+        const green = new THREE.Color(0x8aa982), straw = new THREE.Color(0xc2a56a);
+        leaves.forEach((p, i) => {
+          dummy.rotation.set(0, p.rot, 0);
+          dummy.position.set(p.x, p.y, p.z);
+          dummy.scale.setScalar(0.8 + p.k * 0.7);
+          dummy.updateMatrix();
+          leafIm.setMatrixAt(i, dummy.matrix);
+          leafIm.setColorAt(i, tint.copy(green).lerp(straw, p.k));
+        });
+        dummy.scale.setScalar(1); dummy.rotation.set(0, 0, 0);
+        leafIm.instanceMatrix.needsUpdate = true;
+        if (leafIm.instanceColor) leafIm.instanceColor.needsUpdate = true;
+        leafIm.count = leaves.length;
+        leafIm.frustumCulled = false;
+        leafIm.name = 'vista.floatLeaves';
+        nearDetail.add(leafIm);
+        nearDetail.userData.vistaCounts = { tufts: tufts.length, leaves: leaves.length };
+      }
+
+      // ① 旧城台地：只给城周坡地一层极淡平整染色，弱化「府城长在陡坡上」的观感
+      const plat = new THREE.PlaneGeometry(18, 12, 18, 12);
+      plat.rotateX(-Math.PI / 2);
+      plat.translate(ch.x, 0, ch.z + 5);
+      const pv = plat.attributes.position;
+      for (let i = 0; i < pv.count; i++) pv.setY(i, heightAt(pv.getX(i), pv.getZ(i)) + 0.035);
+      pv.needsUpdate = true;
+      const platMesh = new THREE.Mesh(plat, basic(0.18, { color: 0xe8dec6 }));
+      platMesh.renderOrder = 2;
+      nearDetail.add(platMesh);
+
+      // ② 渭水：湿岸 → 水面 → 细高光，三层递进自带柔边；纯装饰，不进 RIVERS 规则表
+      const wei = new THREE.CatmullRomCurve3([
+        [-48, -9], [-43, -10], [-39, -11.4], [-34, -10.8], [-29, -9.4], [-24, -8.6],
+      ].map(([x, z]) => new THREE.Vector3(x, 0, z))).getPoints(90);
+      for (const L of [
+        { w: 1.52, c: 0xc9bfa4, o: 0.18, lift: 0.010 },   // 外层湿岸：让水带不似贴纸
+        { w: 0.98, c: 0xa9a184, o: 0.34, lift: 0.020 },
+        { w: 0.64, c: 0x6e9aa8, o: 0.64, lift: 0.040 },
+        { w: 0.30, c: 0xbcd8e2, o: 0.34, lift: 0.060 },
+      ]) {
+        const m = new THREE.Mesh(
+          ribbonGeometry(wei, L.w, L.lift, L.c, 0.12, WATER_Y, true),
+          basic(L.o, { vertexColors: true }));
+        m.renderOrder = 3;
+        nearDetail.add(m);
+      }
+
+      // ③ 唐城坊格残垣：外郭轮廓 + 棋盘格 + 朱雀大街双线，逐点贴地，纯线刻
+      const seg = [];
+      const line = (x0, z0, x1, z1, steps = 10) => {
+        for (let i = 0; i < steps; i++) {
+          const a = i / steps, b = (i + 1) / steps;
+          const ax = mix(x0, x1, a), az = mix(z0, z1, a);
+          const ex = mix(x0, x1, b), ez = mix(z0, z1, b);
+          seg.push(ax, heightAt(ax, az) + 0.10, az, ex, heightAt(ex, ez) + 0.10, ez);
+        }
+      };
+      const gx0 = ch.x - 9, gx1 = ch.x + 9, gz0 = ch.z + 1, gz1 = ch.z + 11;
+      line(gx0, gz0, gx1, gz0); line(gx1, gz0, gx1, gz1);
+      line(gx1, gz1, gx0, gz1); line(gx0, gz1, gx0, gz0);
+      for (let k = 1; k < 4; k++) line(gx0 + k * 4.5, gz0, gx0 + k * 4.5, gz1);
+      for (let k = 1; k < 4; k++) line(gx0, gz0 + k * 2.5, gx1, gz0 + k * 2.5);
+      line(ch.x - 0.7, gz0, ch.x - 0.7, gz1);
+      line(ch.x + 0.7, gz0, ch.x + 0.7, gz1);
+      const gridGeo = new THREE.BufferGeometry();
+      gridGeo.setAttribute('position', new THREE.Float32BufferAttribute(seg, 3));
+      // 虚线比实线更像「残垣线刻」，且不会在近景糊成一层坐标纸
+      const grid = new THREE.LineSegments(gridGeo, addFade(new THREE.LineDashedMaterial({
+        color: 0x8a7a62, transparent: true, opacity: 0.58, depthWrite: false,
+        dashSize: 0.42, gapSize: 0.30,
+      }), 0.58));
+      grid.computeLineDistances();
+      grid.renderOrder = 4;
+      grid.name = 'changan.fangge';
+      nearDetail.add(grid);
+
+      // ④ 灞桥：木构桥面 + 双侧扶栏 + 石墩，给「八水绕长安」一个可见落点
+      // 桥心由渭水曲线插值求得，而非硬编码偏移：俯视时水带必须正好从桥面中段穿过，
+      // 否则会被读成「望楼旁的栈道」。
+      const bx = ch.x + 2.6;
+      let bz = ch.z + 4.6;
+      for (let i = 0; i < wei.length - 1; i++) {
+        const a = wei[i], b = wei[i + 1];
+        if (a.x === b.x || (a.x - bx) * (b.x - bx) > 0) continue;
+        const t = (bx - a.x) / (b.x - a.x);
+        bz = a.z + (b.z - a.z) * t;
+        break;
+      }
+      const by = heightAt(bx, bz) + 0.30;
+      // 铺板分条留缝，俯视不会读成一块平放在干地上的实心木板；
+      // 两端石墩露出水面一截，才把「桥」和「栈道／跳板」区分开。
+      const parts = [];
+      for (let i = -3; i <= 3; i++)
+        parts.push(new THREE.BoxGeometry(1.45, 0.09, 0.26).translate(bx, by, bz + i * 0.31));
+      for (const sx of [-0.70, 0.70]) {
+        parts.push(new THREE.BoxGeometry(0.09, 0.09, 2.30).translate(bx + sx, by + 0.40, bz));
+        for (const sz of [-0.95, 0, 0.95])
+          parts.push(new THREE.BoxGeometry(0.11, 0.44, 0.11).translate(bx + sx, by + 0.22, bz + sz));
+      }
+      for (const sz of [-1.02, 1.02])
+        parts.push(new THREE.BoxGeometry(1.52, 0.44, 0.34).translate(bx, by - 0.22, bz + sz));
+      // 实心构件写深度：原先全层 depthWrite:false 只靠 renderOrder 硬排序，
+      // 换机位时望楼／桥面会被后画的瓦垄罩整片盖住。
+      const bridge = new THREE.Mesh(mergeAll(parts), addFade(new THREE.MeshStandardMaterial({
+        color: 0x8a6b46, roughness: 0.92, transparent: true, opacity: 0.92, depthWrite: true,
+      }), 0.92));
+      bridge.renderOrder = 7;
+      bridge.name = 'changan.baqiao';
+      nearDetail.add(bridge);
+
+      // ⑤ 清河寨专属木构望楼／门楼：干栏立柱 + 平台 + 栏板 + 四坡顶 + 斜梯，
+      // 取代原先两座「方盒 + 锥帽」的常驻塔，让近景真的读得出是寨而非园林亭。
+      if (qh) {
+        const wood = [], caps = [];
+        const rQ = cityViews.changan.lib.half * 1.95 + 0.62 + 0.95;
+        // 四坡顶的四条垂脊：俯视时不再读成一块深棕方盒，而是有起翘的屋顶
+        const ridge = (from, to, r) => {
+          const dir = new THREE.Vector3().subVectors(to, from);
+          const g = new THREE.CylinderGeometry(r, r, dir.length(), 4);
+          g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(
+            new THREE.Vector3(0, 1, 0), dir.normalize()));
+          g.translate((from.x + to.x) / 2, (from.y + to.y) / 2, (from.z + to.z) / 2);
+          return g;
+        };
+        const towerAt = (tx, tz, h) => {
+          const ty = heightAt(tx, tz);
+          for (const sx of [-0.36, 0.36]) for (const sz of [-0.36, 0.36])
+            wood.push(new THREE.BoxGeometry(0.11, h, 0.11).translate(tx + sx, ty + h / 2, tz + sz));
+          wood.push(new THREE.BoxGeometry(1.05, 0.12, 1.05).translate(tx, ty + h, tz));
+          for (const sx of [-0.48, 0.48]) {
+            wood.push(new THREE.BoxGeometry(0.07, 0.40, 1.05).translate(tx + sx, ty + h + 0.26, tz));
+            wood.push(new THREE.BoxGeometry(1.05, 0.40, 0.07).translate(tx, ty + h + 0.26, tz + sx));
+          }
+          caps.push(new THREE.ConeGeometry(0.82, 0.52, 4)
+            .rotateY(Math.PI / 4).translate(tx, ty + h + 0.78, tz));
+          const apex = new THREE.Vector3(tx, ty + h + 1.05, tz);
+          for (const sx of [-1, 1]) for (const sz of [-1, 1])
+            wood.push(ridge(apex, new THREE.Vector3(tx + sx * 0.58, ty + h + 0.52, tz + sz * 0.58), 0.045));
+          wood.push(new THREE.BoxGeometry(0.13, 0.16, 0.13).translate(tx, apex.y + 0.08, tz));
+          wood.push(new THREE.BoxGeometry(0.10, 0.08, 1.3)
+            .rotateX(0.42).translate(tx + 0.72, ty + h * 0.55, tz));
+        };
+        towerAt(ch.x, ch.z - rQ, 1.9);
+        towerAt(ch.x, ch.z + rQ, 1.9);
+        towerAt(ch.x + rQ, ch.z, 1.35);   // 东面寨门楼
+        const woodMat = addFade(new THREE.MeshStandardMaterial({
+          color: 0x71543a, roughness: 0.92, transparent: true, opacity: 0.95, depthWrite: true,
+        }), 0.95);
+        const capMat = addFade(new THREE.MeshStandardMaterial({
+          color: 0x6a6150, roughness: 0.95, transparent: true, opacity: 0.95,
+          depthWrite: true, side: THREE.DoubleSide, forceSinglePass: true,
+        }), 0.95);
+        const wm = new THREE.Mesh(mergeAll(wood), woodMat);
+        wm.renderOrder = 7; wm.name = 'qinghe.watchtowers'; nearDetail.add(wm);
+        const cm = new THREE.Mesh(mergeAll(caps), capMat);
+        cm.renderOrder = 7; nearDetail.add(cm);
+      }
+
+      // ⑥ 近景 LOD 瓦垄：只复制屋顶部件、沿 Y 外扩 0.02 叠一层图集 UV 罩面。
+      // 不替换 24 城合批基座、不改共享材质，故 ctex 默认关时远景仍逐像素不变。
+      const roofLib = buildCityGeometry(cityTier(CHANGAN_DEF), true, matOn);
+      if (roofLib.roofOverlay) {
+        let roofAtlas = atlas;
+        if (!roofAtlas) {
+          roofAtlas = new THREE.TextureLoader().load(new URL('textures/city-surface.png', document.baseURI).href);
+          roofAtlas.colorSpace = THREE.NoColorSpace;   // 乘性灰度遮罩，不能走 sRGB 解码
+          roofAtlas.wrapS = THREE.RepeatWrapping;
+          roofAtlas.wrapT = THREE.ClampToEdgeWrapping;
+          roofAtlas.anisotropy = 4;
+        }
+        const roofMat = addFade(new THREE.MeshStandardMaterial({
+          vertexColors: true, map: roofAtlas, roughness: 0.9,
+          transparent: true, opacity: 0.92, depthWrite: true,
+          side: THREE.DoubleSide, forceSinglePass: true,
+        }), 0.92);
+        const roof = new THREE.Mesh(roofLib.roofOverlay, roofMat);
+        roof.position.set(ch.x, heightAt(ch.x, ch.z) + 0.02, ch.z);
+        roof.renderOrder = 8;
+        roof.name = 'changan.roofOverlay';
+        nearDetail.add(roof);
+      }
+
+      // ⑦ 中央建筑定调：低模屋面本就自带正脊 + 鸱吻（models.js 的 ridgeParts），
+      // 这里只在前檐下挂一方「京兆」匾，绝不再叠第二根正脊。
+      // 脊线 y = lib.height - 0.72；早先误用 roofOverlay.boundingBox.max.y
+      //（那是鸱吻尖端，比脊线高约 0.44），结果多出一根悬在半空的深棕横杆。
+      // 山寨木栅／望楼仍作城外防御，名实关系由此闭合。
+      {
+        const lib = cityViews.changan.lib;
+        const ridgeY = lib.height - 0.72;
+        const roofTop = cityTier(CHANGAN_DEF) === 2 ? 2.39 : 1.15;
+        const eaveY = ridgeY - roofTop;
+        const trim = new THREE.Group();
+        trim.name = 'changan.towerTrim';
+        trim.position.set(ch.x, heightAt(ch.x, ch.z), ch.z);
+
+        const pc = document.createElement('canvas');
+        pc.width = 256; pc.height = 88;
+        const px = pc.getContext('2d');
+        px.fillStyle = '#3a2b20';
+        px.fillRect(8, 8, 240, 72);
+        px.strokeStyle = '#c9a96a'; px.lineWidth = 4;
+        px.strokeRect(14, 14, 228, 60);
+        px.fillStyle = '#f3e4c4';
+        px.font = 'bold 54px "Songti SC","STSong","SimSun",serif';
+        px.textAlign = 'center'; px.textBaseline = 'middle';
+        px.fillText('京兆', 128, 46, 200);
+        const plaqueTex = new THREE.CanvasTexture(pc);
+        plaqueTex.colorSpace = THREE.SRGBColorSpace;
+        const plaqueMat = addFade(new THREE.MeshBasicMaterial({
+          map: plaqueTex, transparent: true, opacity: 1, depthWrite: false, side: THREE.DoubleSide,
+        }), 1);
+        // 四面各挂一块，按相机主方向只显一面：避免同屏出现两块匾、或背面读到反字。
+        // 高度取檐口下 0.31（而非屋脊下），匾额才不会像贴在瓦面上的贴纸。
+        const plaqueR = lib.half * 1.02 + 0.06;
+        const plaques = [];
+        for (const d of [
+          { x: 0, z: 1, rot: 0 }, { x: 0, z: -1, rot: Math.PI },
+          { x: 1, z: 0, rot: Math.PI / 2 }, { x: -1, z: 0, rot: -Math.PI / 2 },
+        ]) {
+          const plaque = new THREE.Mesh(new THREE.PlaneGeometry(1.28, 0.38), plaqueMat);
+          plaque.position.set(d.x * plaqueR, eaveY - 0.31, d.z * plaqueR);
+          plaque.rotation.y = d.rot;
+          plaque.renderOrder = 9;
+          plaque.visible = false;
+          trim.add(plaque);
+          plaques.push(plaque);
+        }
+        nearDetail.userData.plaqueCenter = [ch.x, ch.z];
+        nearDetail.userData.plaques = plaques;
+        nearDetail.add(trim);
+      }
+    }
+  }
+
   // ── 状态同步 ──
   let selectedId = null;
   let reachable = [];
-  // 透明度归零的圆环直接退出渲染队列，省掉每帧上百个空 draw call
+  // 透明度归零的圆环直接退出渲染队列，省掉每帧上百个空 draw call。
+  // baseOpacity 是玩法状态的唯一真源：LOD 每帧从它重算，避免逐帧连乘把环带衰减到 0。
   function setRing(ring, opacity) {
+    ring.userData.baseOpacity = opacity;
     ring.material.opacity = opacity;
     ring.visible = opacity > 0.001;
   }
@@ -1636,14 +2253,27 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
         v.tex.needsUpdate = true;
         v.labelKey = labelKey;
       }
+      const stationed = !!s.stationAt(id);
+      const goalOn = previewMarks ? previewMarks.has(id) : !!s.scenario?.marks?.includes(id);
       setRing(v.selRing, id === selectedId ? 0.95 : 0);
       setRing(v.reachRing, reachable.includes(id) ? 0.8 : 0);
-      setRing(v.stationRing, s.stationAt(id) ? 0.85 : 0);
+      setRing(v.stationRing, stationed ? 0.85 : 0);
       setRing(v.isoRing, isolated ? 0.82 : 0);
       // 预览态由开场页主题接管；退出后交回 state.scenario 的原有朱批圈
-      setRing(v.goalRing, previewMarks
-        ? (previewMarks.has(id) ? 0.86 : 0)
-        : (s.scenario?.marks?.includes(id) ? 0.72 : 0));
+      setRing(v.goalRing, previewMarks ? (goalOn ? 0.86 : 0) : (goalOn ? 0.72 : 0));
+
+      // 状态朱签与地面环同源：近景环带淡出后由它接手表达，玩法信息不丢。
+      const lines = [];
+      if (isolated) lines.push('粮道断绝');
+      if (stationed) lines.push(qh ? '队长坐镇' : '主帅驻节');
+      if (goalOn) lines.push('必守');
+      const statusKey = lines.join('|');
+      if (v.statusKey !== statusKey) {
+        drawStatus(v.statusCv, lines);
+        v.statusTex.needsUpdate = true;
+        v.statusKey = statusKey;
+      }
+      v.statusWanted = lines.length > 0;
 
       // 营帐实例同理：兵力档位或阵营没变就不重传矩阵与颜色
       const shown = Math.max(1, Math.min(TENT_SLOTS, Math.ceil(c.troops / 2.4)));
@@ -1727,9 +2357,9 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
   function setPresentation(on) {
     presentation = !!on;
     controls.enabled = !presentation;
-    // 名牌是固定尺寸 Sprite：近景主题下会放大到互相重叠，开场页统一收小，退出逐字还原。
-    const k = presentation ? 0.66 : 1;
-    for (const id in cityViews) cityViews[id].label.scale.set(8.0 * k, 2.50 * k, 1);
+    // 名牌是固定尺寸 Sprite：开场页与近景都要收小，两处系数统一由 labelScaleK() 合成；
+    // 退出表现层且回到远景时仍逐字回到 8.0 / 2.50。
+    syncLabelScales();
   }
   /** 朱批圈是项目已有的「必守／必取」语义，用它表达剧本焦点，不改任何阵营旗色。 */
   function setPreviewMarks(ids) {
@@ -1840,12 +2470,50 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
       b.line.rotation.y = -a + Math.PI / 2;
     }
 
+    const nf = nearFactor(), df = detailFactor();
+    const ringFade = ringFadeK(nf);
+    syncLabelScales();   // 相机缓动时名牌跟着收放，避免近景把城楼整片盖住
     for (const id in cityViews) {
       const v = cityViews[id];
-      if (v.selRing.material.opacity > 0) v.selRing.material.opacity = 0.65 + Math.sin(elapsed * 4) * 0.3;
-      if (v.reachRing.material.opacity > 0) v.reachRing.material.opacity = 0.55 + Math.sin(elapsed * 3.2) * 0.3;
+      // pulse 从 baseOpacity 判定而非上帧 opacity：否则近景淡到 0 后再拉远也不会恢复。
+      // 选中环是近景唯一保留的地面环；fade=1 时下面取值与旧版逐字相同。
+      if ((v.selRing.userData.baseOpacity ?? 0) > 0)
+        v.selRing.material.opacity = 0.65 + Math.sin(elapsed * 4) * 0.3;
+      if ((v.reachRing.userData.baseOpacity ?? 0) > 0) {
+        const op = (0.55 + Math.sin(elapsed * 3.2) * 0.3) * ringFade;
+        v.reachRing.material.opacity = op;
+        v.reachRing.visible = op > 0.001;
+      }
       // 朱批圈缓缓明灭；系统「减弱动效」时 elapsed 不递增，自然静止
-      if (v.goalRing.material.opacity > 0) v.goalRing.material.opacity = 0.54 + Math.sin(elapsed * 2.4) * 0.20;
+      if ((v.goalRing.userData.baseOpacity ?? 0) > 0) {
+        const op = (0.54 + Math.sin(elapsed * 2.4) * 0.20) * ringFade;
+        v.goalRing.material.opacity = op;
+        v.goalRing.visible = op > 0.001;
+      }
+      for (const ring of [v.influence, v.stationRing, v.isoRing]) {
+        const op = (ring.userData.baseOpacity ?? 0) * ringFade;
+        ring.material.opacity = op;
+        ring.visible = op > 0.001;
+      }
+      // 用「相机到该城的水平距离」而非 3D 距离：俯视机位 Y 很高但仍是近景，
+      // 用 3D 距离会把朱签误隐（实测 top 机位 28.6 > 26）。
+      const cityPlanDist = Math.hypot(
+        camera.position.x - v.group.position.x,
+        camera.position.z - v.group.position.z,
+      );
+      v.statusMark.visible = !!v.statusWanted && statusVisible(nf, cityPlanDist);
+    }
+    if (nearDetail) {
+      nearDetail.visible = df > 0.02;
+      for (const { mat, base } of nearFadeMats) mat.opacity = base * df;
+      // 匾额只朝相机主方向显一面，避免反面镜像字与「一城两匾」
+      const pl = nearDetail.userData.plaques;
+      if (pl) {
+        const [cx, cz] = nearDetail.userData.plaqueCenter;
+        const dx = camera.position.x - cx, dz = camera.position.z - cz;
+        const idx = Math.abs(dx) > Math.abs(dz) ? (dx > 0 ? 2 : 3) : (dz > 0 ? 0 : 1);
+        for (let i = 0; i < pl.length; i++) pl[i].visible = i === idx;
+      }
     }
 
     for (let i = marches.length - 1; i >= 0; i--) {
@@ -1944,7 +2612,10 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
         rider: !!unitGeos?.Rider, siege: !!unitGeos?.Siege,
         siegeInstances: siegeMesh ? siegeMesh.count : 0,
         tex, cityTex, cityMap: !!matSolid.map, factionMap: !!factionMat.map,
-        mat: matOn, atmos: atmosOn, skyDome: !!skyDome, sunGlow: !!sunGlow,
+        mat: matOn, atmos: atmosOn, vista, skyDome: !!skyDome, sunGlow: !!sunGlow,
+        waterVertexColors: !!seaMat.vertexColors,
+        vistaCounts: nearDetail?.userData.vistaCounts ?? null,
+        minDistance: controls.minDistance, cameraPos: camera.position.toArray(),
         contactInk: contactInk.visible, contactOpacity: contactInk.material.opacity,
         groundShadows: groundShadowCount,
         terrain: terrainStyle, hdSegX: hd ? HD_SEG_X : SEG_X, hdSegZ: hd ? HD_SEG_Z : SEG_Z,
@@ -1968,5 +2639,6 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
     flyTo, applyTheme, clearTheme, setPresentation, setPreviewMarks, exitPresentation,
     camera, controls, renderer, scene, quality, terrain: terrainStyle,
     ink: inkCtl, assets: assetCtl,
+    lod: { factor: () => nearFactor(), detail: () => detailFactor() },
   };
 }

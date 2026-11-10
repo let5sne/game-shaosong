@@ -64,7 +64,7 @@ const legacy = {
 export const SETTING_GROUPS = [
   {
     id: 'visual', title: '观感与资产',
-    note: '默认保留清透的宣纸底色、高清树木与材质质感；地貌档、大气透视、宣纸增强、贴图与开场页电影感均为可选项，互不干扰。',
+    note: '默认保留清透的宣纸底色、高清树木与材质质感；地貌档、大气透视、寨内近观、宣纸增强、贴图与开场页电影感均为可选项，互不干扰。',
     items: [
       {
         id: 'terrain', label: '地貌精度', type: 'select', default: 'paper', effect: 'reload',
@@ -101,6 +101,12 @@ export const SETTING_GROUPS = [
         desc: '顶点色渐变天穹替代单色背景，太阳方向添一层极淡辉光；暖主光配冷色天光，把坡面分出迎光与背光。不改 shader、不启全屏后处理，仅增 1~2 个 draw call。低角度仰视最为明显，建议与「宣纸增强」二选一；默认关闭以保留清透观感。',
         decode: p => (p.has('atmos') ? p.get('atmos') === '1' : undefined),
         encode: v => ({ atmos: v ? '1' : null }),
+      },
+      {
+        id: 'vista', label: '寨内近观 · 浅水', type: 'toggle', default: false, effect: 'reload',
+        desc: '清河关首镜压到寨墙近旁，河面与水陆交界按水深铺出浅沙→浅青→深青的渐变与一道碎浪线，近景再补草花碎石与浮叶。所有增量只在拉近时进入渲染队列，全景机位逐字不变。与「大气透视」的暮色雾感方向相反，建议二选一；默认关闭以保留清透宣纸观感。',
+        decode: p => (p.has('vista') ? p.get('vista') === '1' : undefined),
+        encode: v => ({ vista: v ? '1' : null }),
       },
       {
         id: 'grade', label: '开场页电影感', type: 'toggle', default: true, effect: 'live',
@@ -346,6 +352,7 @@ export function derive(values, env = {}) {
       : values.motion === 'off' ? true : !!env.systemReducedMotion,
     ink: !!values.ink,
     atmos: !!values.atmos,
+    vista: !!values.vista,
     economy: !!values.economy,
     grade: values.grade !== false,
     mat: !!values.mat,

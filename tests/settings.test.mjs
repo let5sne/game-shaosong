@@ -21,6 +21,7 @@ test('出厂默认：增强与贴图全关，资产全开，自动档', () => {
   const { values, sources } = readSettings('', makeStore());
   assert.equal(values.ink, false);
   assert.equal(values.atmos, false, '大气透视默认关闭，守住清透宣纸观感');
+  assert.equal(values.vista, false, '寨内近观默认关闭，全图机位逐字不变');
   assert.equal(values.terrain, 'paper');
   assert.equal(values.ground, false);
   assert.equal(values.city, false);
@@ -39,16 +40,17 @@ test('出厂默认：增强与贴图全关，资产全开，自动档', () => {
   assert.equal(values.mute, false);
   assert.ok(Object.values(sources).every(s => s === 'default'));
   assert.equal(SETTING_GROUPS.length, 3);
-  assert.equal(SETTING_ITEMS.length, 18);
+  assert.equal(SETTING_ITEMS.length, 19);
 });
 
 test('历史 URL 参数语义全部保留', () => {
-  const all = '?tex=1&ink=1&units=0&capitals=0&trees=0&mat=0&grade=0&atmos=1&economy=1&quality=low&auto=1&seed=123456&scenario=yancheng';
+  const all = '?tex=1&ink=1&units=0&capitals=0&trees=0&mat=0&grade=0&atmos=1&vista=1&economy=1&quality=low&auto=1&seed=123456&scenario=yancheng';
   const { values } = readSettings(all, makeStore());
   assert.equal(values.ground, true, '?tex=1 开地表');
   assert.equal(values.city, true, '?tex=1 同时开城池');
   assert.equal(values.ink, true);
   assert.equal(values.atmos, true, '?atmos=1 开启大气透视');
+  assert.equal(values.vista, true, '?vista=1 开启寨内近观');
   assert.equal(values.units, false);
   assert.equal(values.capitals, false);
   assert.equal(values.trees, false);
@@ -65,6 +67,7 @@ test('历史 URL 参数语义全部保留', () => {
   assert.equal(readSettings('?ctex=1', makeStore()).values.ground, false, '?ctex=1 只开城池');
   assert.equal(readSettings('?ctex=1', makeStore()).values.city, true);
   assert.equal(readSettings('?atmos=0', makeStore()).values.atmos, false);
+  assert.equal(readSettings('?vista=0', makeStore()).values.vista, false);
   assert.equal(readSettings('?ink=0', makeStore()).values.ink, false);
   assert.equal(readSettings('?ink=0', makeStore()).sources.ink, 'url', '显式关也要算链接指定');
   assert.equal(readSettings('?quality=high', makeStore()).values.quality, 'high');
@@ -76,7 +79,7 @@ test('历史 URL 参数语义全部保留', () => {
   assert.equal(readSettings('?seed=abc', makeStore()).values.seed, '', '局号只收数字');
   assert.equal(readSettings('?scenario=nope', makeStore()).values.scenario, 'campaign');
   assert.deepEqual(new Set(knownUrlKeys), new Set([
-    'ink', 'atmos', 'mat', 'grade', 'trees', 'tex', 'ctex', 'units', 'capitals', 'quality', 'motion', 'terrain',
+    'ink', 'atmos', 'vista', 'mat', 'grade', 'trees', 'tex', 'ctex', 'units', 'capitals', 'quality', 'motion', 'terrain',
     'scenario', 'difficulty', 'seed', 'auto', 'mute', 'economy',
   ]));
 });
@@ -136,7 +139,7 @@ test('链接往返：联动的 tex/ctex 不能互相隐含打开', () => {
     { ground: false, city: false },
   ];
   for (const c of cases) {
-    const values = { ...defaults(), ...c, ink: true, atmos: true, units: false, capitals: false, trees: false, mat: false, grade: false, quality: 'low', motion: 'off', seed: '42', scenario: 'shunchang', difficulty: 'easy', auto: true, mute: true };
+    const values = { ...defaults(), ...c, ink: true, atmos: true, vista: true, units: false, capitals: false, trees: false, mat: false, grade: false, quality: 'low', motion: 'off', seed: '42', scenario: 'shunchang', difficulty: 'easy', auto: true, mute: true };
     const search = encodeSearch(values);
     const back = readSettings(search, makeStore()).values;
     assert.deepEqual(back, values, `往返不一致：${search}`);
@@ -180,6 +183,9 @@ test('derive 派生出渲染层与开局层实际需要的字段', () => {
   assert.equal(d.atmos, false, '大气透视默认关闭');
   assert.equal(derive({ ...defaults(), atmos: true }, {}).atmos, true);
   assert.equal(settingById('atmos').effect, 'reload', '大气透视改的是场景几何与光色，须重建舆图');
+  assert.equal(d.vista, false, '寨内近观默认关闭');
+  assert.equal(derive({ ...defaults(), vista: true }, {}).vista, true);
+  assert.equal(settingById('vista').effect, 'reload', '近观改的是初始机位与场景几何，须重建舆图');
   assert.equal(settingById('economy').effect, 'live', '治略可即时开关，不必重载');
   assert.equal(derive({ ...defaults(), motion: 'on' }, { systemReducedMotion: true }).reducedMotion, false);
   assert.equal(derive({ ...defaults(), scenario: 'campaign' }, {}).scenario, null);

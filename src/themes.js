@@ -88,3 +88,16 @@ export const HOME_POSE = Object.freeze({
   default: Object.freeze({ position: Object.freeze([6, 84, 96]), target: Object.freeze([0, 0, -3]), fov: 46 }),
   qinghe:  Object.freeze({ position: Object.freeze([-4, 44, 22]), target: Object.freeze([-28, 0, -15]), fov: 46 }),
 });
+
+/**
+ * 「寨内近观」机位（设置第 19 项 vista 开启时只对清河关生效）。
+ * 以清河寨（长安，-37,-16）为视点，距离 30、仰角约 0.92rad、方位偏东南，
+ * 视野高约 25 单位——近到草花碎石能占几个像素，又刚好把寨墙与黄河同框。
+ * OrbitControls.minDistance 在 vista 下同步放宽到 16，否则 34 会把首镜推远。
+ * 纯展示数据；其余剧本、复位逻辑与全图机位不受影响。
+ */
+export const VISTA_POSE = Object.freeze({
+  position: Object.freeze([-24.5, 19.4, 4.4]),
+  target: Object.freeze([-37, 1.2, -16]),
+  fov: 46,
+});

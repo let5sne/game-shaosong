@@ -10,6 +10,7 @@ import {
   TERRAIN_STYLES, HD_SEG_X, HD_SEG_Z,
   makeHeightField, setTerrainStyle, heightAt,
   computeTerrainAO, terrainColorHD,
+  riverProximity, riverDistance, BOULDER_PARAMS,
 } from '../src/world.js';
 import { boulderGeometry, applyVerticalAO } from '../src/models.js';
 
@@ -25,6 +26,41 @@ function pngInfo(path) {
 }
 
 const luma = c => c.r * 0.2126 + c.g * 0.7152 + c.b * 0.0722;
+const srgbLuma = hex => ((hex >> 16 & 255) * 0.2126 + (hex >> 8 & 255) * 0.7152 + (hex & 255) * 0.0722) / 255;
+
+test('riverDistance 不封顶：3.2 内与遮罩同值，超出后可继续用于避水筛选', () => {
+  const [cx, cz] = RIVERS[0].points[0];
+  assert.ok(riverProximity(cx, cz) < 0.05, '河道控制点应贴合曲线');
+  assert.equal(riverDistance(cx, cz), riverProximity(cx, cz), '近处两函数应逐点相等');
+  // 同一条采样线上，<3.2 的点两函数必须完全一致（同样的 pts / 步长）
+  let sameNear = 0;
+  for (let t = 0; t <= 20; t++) {
+    const x = cx + t * 0.12, z = cz + t * 0.05;
+    if (riverProximity(x, z) < 3.2) {
+      assert.equal(riverDistance(x, z), riverProximity(x, z), `近河点 @${x},${z} 不一致`);
+      sameNear++;
+    }
+  }
+  assert.ok(sameNear > 8, '应有足够多的近河采样点');
+  for (const [x, z] of [[54, 42], [0, 42], [-50, 40]]) {
+    assert.equal(riverProximity(x, z), 3.2, '遮罩应在 3.2 封顶');
+    assert.ok(riverDistance(x, z) > 5.0, `远离河处精确距离仍须可用，实际 ${riverDistance(x, z)}`);
+  }
+});
+
+test('碎岩分档：paper 逐字保持原版，real 收敛白色巨石', () => {
+  const p = BOULDER_PARAMS.paper, r = BOULDER_PARAMS.real;
+  assert.deepEqual({ ...p }, {
+    tint: 0xe4dfcc, base: 2.1, span: 1.8, sink: 0.34, subSink: 0.40, water: 3.0, chance: 0.13,
+  }, 'paper 是像素 A/B 基线，不得改');
+  assert.notEqual(r.tint, 0xf2f0e8, 'real 不得回到近纯白');
+  assert.ok(srgbLuma(r.tint) < 0.78, `real 岩色仍太白 ${srgbLuma(r.tint).toFixed(3)}`);
+  assert.ok(srgbLuma(r.tint) < srgbLuma(p.tint), 'real 应比 paper 更沉稳');
+  assert.ok(r.base + r.span < p.base + p.span * 0.8, 'real 岩块须明显缩小');
+  assert.ok(r.sink > p.sink && r.subSink > p.subSink, 'real 须埋得更深');
+  assert.ok(r.water > 3.2, 'real 避水半径必须超出 riverProximity 的截断值，否则筛选失效');
+  assert.ok(Object.isFrozen(BOULDER_PARAMS) && Object.isFrozen(r));
+});
 
 test('地貌档位与网格常量契约', () => {
   assert.deepEqual([...TERRAIN_STYLES], ['classic', 'paper', 'real']);

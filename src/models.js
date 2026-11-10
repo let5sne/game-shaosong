@@ -429,9 +429,14 @@ export function buildCityGeometry(tierIdx, withAtlas = false, withAO = false) {
     for (const g of parts) applyVerticalAO(g, poleTop, 1, meanF);
   }
 
+  // 近景 LOD 用：只把屋顶部件复制一份（UV 已压进瓦作带），供 world.js 沿 Y
+  // 外扩 0.02 叠出瓦垄罩。不替换 24 城合批的基座，也不碰共享材质。
+  const roofOverlay = withAtlas && roofParts.size
+    ? merge([...roofParts].map(g => g.clone())) : null;
   return {
     solid: merge(A),
     faction: merge(F),
+    roofOverlay,
     flagPos: [px + 0.78, poleTop - 0.62, pz],
     pole: [px, poleTop, pz],
     height: poleTop,
@@ -506,21 +511,44 @@ export function makeFlagTexture(song, big, era, palette) {
   return tex;
 }
 
-/** 流动水纹：透明底 + 浅色波纹线，UV 偏移做流动 */
-export function makeWaterTexture() {
+/** 流动水纹：透明底 + 浅色波纹线，UV 偏移做流动。
+ *  broken=true 时换成破碎短弧 + 稀疏亮点（寨内近观专用），默认逐字节不变。 */
+export function makeWaterTexture(broken = false) {
   const cv = canvas(256, 256);
   const ctx = cv.getContext('2d');
   ctx.clearRect(0, 0, 256, 256);
-  for (let i = 0; i < 22; i++) {
-    const y = i * 12 + (i % 3) * 3;
-    ctx.beginPath();
-    for (let x = 0; x <= 256; x += 8) {
-      const yy = y + Math.sin(x * 0.045 + i * 1.7) * 3.2;
-      if (x === 0) ctx.moveTo(x, yy); else ctx.lineTo(x, yy);
+  if (broken) {
+    // 固定种子的 LCG：两页截图必须拿到同一张贴图，否则像素 A/B 会被随机数污染
+    let s = 20261111;
+    const rnd = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
+    for (let i = 0; i < 54; i++) {
+      const x = rnd() * 256, y = rnd() * 256, len = 6 + rnd() * 22;
+      const bow = (rnd() - 0.5) * 5;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.quadraticCurveTo(x + len * 0.5, y + bow, x + len, y + bow * 0.4);
+      ctx.strokeStyle = `rgba(255,255,255,${0.08 + rnd() * 0.20})`;
+      ctx.lineWidth = 0.8 + rnd() * 1.3;
+      ctx.stroke();
     }
-    ctx.strokeStyle = `rgba(255,255,255,${0.10 + (i % 4) * 0.045})`;
-    ctx.lineWidth = i % 3 === 0 ? 2.2 : 1.1;
-    ctx.stroke();
+    for (let i = 0; i < 26; i++) {
+      ctx.beginPath();
+      ctx.arc(rnd() * 256, rnd() * 256, 0.7 + rnd() * 1.6, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255,255,255,${0.16 + rnd() * 0.28})`;
+      ctx.fill();
+    }
+  } else {
+    for (let i = 0; i < 22; i++) {
+      const y = i * 12 + (i % 3) * 3;
+      ctx.beginPath();
+      for (let x = 0; x <= 256; x += 8) {
+        const yy = y + Math.sin(x * 0.045 + i * 1.7) * 3.2;
+        if (x === 0) ctx.moveTo(x, yy); else ctx.lineTo(x, yy);
+      }
+      ctx.strokeStyle = `rgba(255,255,255,${0.10 + (i % 4) * 0.045})`;
+      ctx.lineWidth = i % 3 === 0 ? 2.2 : 1.1;
+      ctx.stroke();
+    }
   }
   const tex = new THREE.CanvasTexture(cv);
   tex.colorSpace = THREE.SRGBColorSpace;
@@ -566,6 +594,35 @@ export function drawLabel(cv, city, selected, foe = '金') {
   ctx.textAlign = 'center';
   ctx.fillText(song ? '宋' : foe, 689, 185);
   ctx.textAlign = 'start';
+}
+
+/**
+ * 近景状态朱签：状态环在近景淡出后，「粮道断绝／坐镇／必守」改由这枚
+ * 名牌下方的小签承载，玩家不必靠彩色地面环读局面。纯展示，不进存档。
+ */
+export function makeStatusTexture() {
+  const cv = canvas(384, 96);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
+  return { cv, tex };
+}
+export function drawStatus(cv, lines) {
+  const ctx = cv.getContext('2d');
+  const W = cv.width, H = cv.height;
+  ctx.clearRect(0, 0, W, H);
+  if (!lines.length) return;
+  const text = lines.join(' · ');
+  ctx.fillStyle = 'rgba(150,58,48,0.90)';
+  roundRect(ctx, 8, 10, W - 16, H - 20, 14); ctx.fill();
+  ctx.strokeStyle = 'rgba(250,244,228,0.75)'; ctx.lineWidth = 2;
+  roundRect(ctx, 16, 18, W - 32, H - 36, 10); ctx.stroke();
+  ctx.fillStyle = '#faf4e4';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  // 朱签世界宽从 4.4 收到 2.6，字号必须同比放大才不会缩成一条看不清的红线
+  const size = text.length > 10 ? 38 : text.length > 7 ? 43 : 48;
+  ctx.font = `bold ${size}px "Songti SC","STSong","SimSun",serif`;
+  ctx.fillText(text, W / 2, H / 2 + 2, W - 44);
 }
 
 /** 旗面材质：GPU 顶点波动，24 面旗共享同一份时间 uniform */
@@ -699,6 +756,26 @@ export function fieldGeometry() {
   parts.push(box(bw, bh, 0.66 + bw * 2, 0.5 + bw / 2, bh / 2, 0, edge));
   const g = merge(parts);
   return g;
+}
+
+/**
+ * 寨内近观的「一簇地被」：几根草、一朵小白花、一枚碎石合成单个几何，
+ * 交给 InstancedMesh 铺满寨周。刻意用不透明小实体而非 alpha 十字草片：
+ * 近景才有高频碎细节，同时不吃半透明 overdraw。
+ * 局部尺寸约 0.45×0.45，底部贴 y=0；实例旋转／缩放／色偏负责破除重复感。
+ */
+export function litterGeometry() {
+  const parts = [];
+  const grass = 0x8b9d6a, grassDk = 0x74895c, petal = 0xf2efe0, heart = 0xd9b45c, stone = 0xa9a48c;
+  parts.push(cone(0.035, 0.30, -0.10, 0.15, 0.02, grass, 3));
+  parts.push(cone(0.030, 0.24, -0.03, 0.12, -0.08, grassDk, 3));
+  parts.push(cone(0.032, 0.27, 0.06, 0.135, 0.07, grass, 3));
+  parts.push(cone(0.028, 0.20, 0.14, 0.10, 0.01, grassDk, 3));
+  for (const [dx, dz] of [[0.09, -0.09], [0.09, 0.02], [0.20, -0.09], [0.20, 0.02]])
+    parts.push(box(0.075, 0.018, 0.075, dx, 0.025, dz, petal));
+  parts.push(box(0.040, 0.030, 0.040, 0.145, 0.040, -0.035, heart));
+  parts.push(cone(0.105, 0.095, -0.18, 0.048, -0.17, stone, 5));
+  return merge(parts);
 }
 
 /** 远山：一簇低多边形山峰，用 InstancedMesh 沿边界摆放，由雾融进纸面 */
