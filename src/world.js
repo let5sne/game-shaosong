@@ -565,6 +565,70 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
   fill.position.set(55, 40, -60);
   scene.add(fill);
 
+  // ── 结构化环境贴图（?env=1 开启，默认关）──
+  // 做法来自参考页：往 env 场景里放天空球 + 自发光日板 + 冷天光板，PMREM 后只挂给指定材质
+  //（不走 scene.environment：实测那会让地形也被环境光抬亮，即使 envMapIntensity=0）。
+  // 实测结论：本作是「亮纸 + 平光」场景，环境光加进来只会抬亮与压平——
+  // 海面 +19 亮度、std 39.9→33.4、边缘 −12%；把天空压到 0.35 后仍是同一方向。
+  // 参考页之所以成立，是因为它是「暗环境 + 强光」，环境光本身就是主光。
+  // 保留开关而不默认开：留给「暗调剧本／夜景」那类场景，不属于当前的宣纸日景。
+  let envTexForMaterials = null;
+  const iblOn = new URLSearchParams(location.search).get('env') === '1';
+  if (iblOn) {
+    const envScene = new THREE.Scene();
+
+    // 天空球：纸色渐变（天顶略亮、地平线用底色、下方暖灰）
+    const cv = document.createElement('canvas');
+    cv.width = 128; cv.height = 64;
+    const ctx = cv.getContext('2d');
+    const sky = new THREE.Color(SKY);
+    // 天空整体压暗到 0.35：环境光的漫反射项来自整张天空的平均亮度，压暗它才能
+    // 「只给高光、不给平光」——日板保持高强度，粗糙面几乎不受影响，光滑面拿到明确方向。
+    const zen = sky.clone().lerp(new THREE.Color(0xffffff), 0.22).multiplyScalar(0.35);
+    const gnd = sky.clone().lerp(new THREE.Color(0x6b5a3e), 0.30).multiplyScalar(0.30);
+    const mid = sky.clone().multiplyScalar(0.35);
+    const grad = ctx.createLinearGradient(0, 0, 0, 64);
+    grad.addColorStop(0.00, '#' + zen.getHexString());
+    grad.addColorStop(0.46, '#' + mid.getHexString());
+    grad.addColorStop(0.54, '#' + sky.clone().lerp(gnd, 0.5).getHexString());
+    grad.addColorStop(1.00, '#' + gnd.getHexString());
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 128, 64);
+    const skyTex = new THREE.CanvasTexture(cv);
+    skyTex.colorSpace = THREE.SRGBColorSpace;
+    const skyDome = new THREE.Mesh(
+      new THREE.SphereGeometry(100, 32, 16),
+      new THREE.MeshBasicMaterial({ map: skyTex, side: THREE.BackSide, depthWrite: false }),
+    );
+    envScene.add(skyDome);
+
+    // 日板：主光方向上一块高强度自发光面，给高光一个明确形状
+    const sunCard = new THREE.Mesh(
+      new THREE.PlaneGeometry(26, 26),
+      new THREE.MeshBasicMaterial({ color: sun.color.clone().multiplyScalar(5.5), side: THREE.DoubleSide }),
+    );
+    sunCard.position.copy(sun.position).normalize().multiplyScalar(62);
+    sunCard.lookAt(0, 0, 0);
+    envScene.add(sunCard);
+
+    // 冷色天光板：补背光面，避免背光侧死黑
+    const coldCard = new THREE.Mesh(
+      new THREE.PlaneGeometry(70, 40),
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(0xa6c4e0).multiplyScalar(1.1), side: THREE.DoubleSide }),
+    );
+    coldCard.position.set(-sun.position.x * 0.6, 46, -sun.position.z * 0.6);
+    coldCard.lookAt(0, 0, 0);
+    envScene.add(coldCard);
+
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    envTexForMaterials = pmrem.fromScene(envScene, 0.04, 0.1, 300).texture;
+    pmrem.dispose();
+    skyTex.dispose();
+    envScene.traverse(o => { if (o.isMesh) { o.geometry.dispose(); o.material.dispose(); } });
+    // 只挂给指定材质（水面/城池），不走 scene.environment：实测 scene.environment 会让
+    // 地形也被环境光照亮（即使 envMapIntensity=0），整幅画面被抬 1.5 倍。
+  }
+
   // ── 开场页表现层 ──
   // 三项都是「视觉只读」：不改 GameState、不进存档、不参与 supplyMap 等规则计算。
   // presentation 只锁住拾取与 OrbitControls；themeSnapshot 保证 clearTheme 逐值还原，
@@ -639,6 +703,7 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
   }
   const land = new THREE.Mesh(landGeo, new THREE.MeshStandardMaterial({
     vertexColors: true, flatShading: !hd, roughness: 1, metalness: 0,
+    envMapIntensity: 0,          // 地表不吃环境光：否则整幅地形被环境光压平（已实测）
   }));
   land.receiveShadow = true;
   // 高清档让山脊把影子投到自己身上：参考图的沟壑立体感主要来自这种自投影，
@@ -724,7 +789,7 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
   }
   const seaMat = new THREE.MeshStandardMaterial({
     color: 0xffffff, vertexColors: true, transparent: true, opacity: 0.82, roughness: 0.30, metalness: 0.10,
-    depthWrite: false, side: THREE.DoubleSide,
+    depthWrite: false, side: THREE.DoubleSide, envMap: envTexForMaterials, envMapIntensity: 1.4,
   });
   seaMat.onBeforeCompile = shader => {
     shader.uniforms.uTime = uTime;
@@ -795,6 +860,7 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
   const matTape = (hex, opacity) => new THREE.MeshStandardMaterial({
     vertexColors: true, transparent: true, opacity, roughness: 0.55,
     side: THREE.DoubleSide, depthWrite: false,
+    envMap: envTexForMaterials, envMapIntensity: 0.9,
   });
   const bankMesh = new THREE.Mesh(mergeAll(banks), matTape(0xffffff, 0.55));
   bankMesh.renderOrder = 2; scene.add(bankMesh);
@@ -1062,9 +1128,13 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
     jin: makeFlagMaterial(flagTex.jin, uTime, FLAG_W),
   };
   const flagGeo = new THREE.PlaneGeometry(FLAG_W, FLAG_H, 14, 6);
-  const matSolid = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, metalness: 0.02 });
+  const matSolid = new THREE.MeshStandardMaterial({
+    vertexColors: true, roughness: 0.92, metalness: 0.02,
+    envMap: envTexForMaterials, envMapIntensity: 0.9,
+  });
+  const cityPbr = cityTex && new URLSearchParams(location.search).get('citypbr') !== '0';
   let atlas = null;
-  if (cityTex) {
+  if (cityTex && !cityPbr) {
     // 图集是「乘性灰度遮罩」而非颜色贴图：故意不做 sRGB 解码，
     // 否则 0.98 会被压成约 0.95 linear，整座城无故变暗。
     atlas = new THREE.TextureLoader().load(new URL('textures/city-surface.png', document.baseURI).href);
@@ -1074,6 +1144,34 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
     atlas.anisotropy = 4;
     matSolid.map = atlas;
     matSolid.needsUpdate = true;              // 加载失败时仍是默认白纹理，等于静默回退
+  }
+  // ── 城池 PBR 套件（?citypbr=0 回到旧的灰度乘性贴图）──
+  // 旧图集只做「乘性明暗」；PBR 套件换成彩色 albedo + ORM（R=AO / G=Roughness / B=Metalness）
+  // + 法线，瓦垄与夯土才有各自的粗糙度与起伏。
+  if (cityPbr) {
+    const load = (name, srgb) => {
+      const t = new THREE.TextureLoader().load(new URL(`textures/${name}`, document.baseURI).href);
+      t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+      t.wrapS = THREE.RepeatWrapping;
+      t.wrapT = THREE.ClampToEdgeWrapping;
+      t.anisotropy = 4;
+      return t;
+    };
+    const albedo = load('city-albedo.png', true);
+    const orm = load('city-orm.png', false);
+    const nrm = load('city-normal.png', false);
+    orm.channel = 0;                 // aoMap 默认读 uv1，这里统一用 uv
+    for (const m of [matSolid]) {
+      m.map = albedo;
+      m.roughnessMap = orm;
+      m.metalnessMap = orm;
+      m.aoMap = orm;
+      m.normalMap = nrm;
+      m.normalScale.set(0.6, 0.6);
+      m.roughness = 1.0;             // 乘子：交给贴图的 G 通道
+      m.metalness = 1.0;             // 乘子：交给贴图的 B 通道（全 0，非金属）
+      m.needsUpdate = true;
+    }
   }
   const cityViews = {};
   const hitMeshes = [];
@@ -1093,10 +1191,24 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
     scene.add(im);
     return { im, ids };
   });
-  const factionMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.82 });
+  const factionMat = new THREE.MeshStandardMaterial({
+    vertexColors: true, roughness: 0.82, envMap: envTexForMaterials, envMapIntensity: 0.9,
+  });
   // 阵营部件（门扇、女墙压顶、栏板、腰线）与主体共用同一张乘性图集：
   // instanceColor 仍决定阵营色，图集只补夯土层理的明暗。
   if (atlas) { factionMat.map = atlas; factionMat.needsUpdate = true; }
+  if (cityPbr && matSolid.map) {
+    // PBR 档下阵营部件也吃同一套贴图，否则木门与夯土会分成两种质感
+    factionMat.map = matSolid.map;
+    factionMat.roughnessMap = matSolid.roughnessMap;
+    factionMat.metalnessMap = matSolid.metalnessMap;
+    factionMat.aoMap = matSolid.aoMap;
+    factionMat.normalMap = matSolid.normalMap;
+    factionMat.normalScale.set(0.6, 0.6);
+    factionMat.roughness = 1.0;
+    factionMat.metalness = 1.0;
+    factionMat.needsUpdate = true;
+  }
   const factionBatches = tierIds.map((ids, t) => {
     const im = new THREE.InstancedMesh(cityLib[t].faction, factionMat, Math.max(1, ids.length));
     im.frustumCulled = false;
