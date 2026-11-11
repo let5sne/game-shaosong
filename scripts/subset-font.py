@@ -16,7 +16,8 @@ Windows、macOS、Linux 拿到的宋体字形、字重与度量都不同，开�
     400 https://fonts.gstatic.com/s/notoserifsc/v36/H4cyBXePl9DZ0Xe7gG9cyOj7uK2-n-D2rd4FY7SCqyWv.ttf
     700 https://fonts.gstatic.com/s/notoserifsc/v36/H4cyBXePl9DZ0Xe7gG9cyOj7uK2-n-D2rd4FY7RlrCWv.ttf
 
-产物：public/fonts/shaosong-serif-{400,700}.woff2、subset-manifest.json
+产物：public/fonts/shaosong-serif-{400,700}.woff2、scripts/subset-manifest.json
+      （清单是构建期产物，运行时不读，不放进 public/ 以免随站点发布）
 许可：public/fonts/OFL.txt（OFL 要求随字体附带版权声明与许可副本）
 未收录的字符由 CSS 字体栈逐字符回退到系统宋体，不会出现豆腐块。
 """
@@ -33,6 +34,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SRC_DIR = ROOT / '.workbuddy' / 'tmp' / 'fontsrc'
 OUT_DIR = ROOT / 'public' / 'fonts'
+MANIFEST_PATH = ROOT / 'scripts' / 'subset-manifest.json'
 # 只扫会真正显示在界面上的源码；测试与脚本里的中文不该把字库撑大。
 SCAN_GLOBS = ['src/*.js', 'src/*.css', 'index.html']
 
@@ -146,7 +148,7 @@ def main() -> None:
         'codepoints': baked_cps,
         'fonts': results,
     }
-    (OUT_DIR / 'subset-manifest.json').write_text(
+    MANIFEST_PATH.write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
     for r in results:
         print(f"  {r['file']}: {r['bytes']:,} B, {r['glyphs']} glyphs, "

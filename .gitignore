@@ -11,6 +11,10 @@ dist/
 # Blender 重导时生成的备份源工程，不入库
 *.blend1
 
+# Python 资产脚本的编译缓存
+__pycache__/
+*.pyc
+
 # WorkBuddy 工作区数据（项目记忆等，保留在磁盘上但不入库）
 .workbuddy/
 

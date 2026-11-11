@@ -10,11 +10,11 @@
 
 无需本地安装，直接打开 **https://let5sne.github.io/game-shaosong/** 即可试玩。
 
-站点由 `.github/workflows/deploy.yml` 自动发布：每次推送 `main` 都会执行 `npm ci` → `npm test` → `npm run build`，测试全绿后把 `dist/` 部署到 GitHub Pages，并在 Actions 中留一份可下载的构建包 `shaosong-dist`；也可在 Actions 页手动触发。构建使用相对路径 `base: './'`，因此站点挂在仓库子路径下也能正常加载模型与字体。
+站点由 `.github/workflows/deploy.yml` 自动发布：每次推送 `main` 都会执行 `npm ci` → 单元测试 → 数值平衡护栏 → `npm run build` → 构建产物体检 → 无头 Chrome 实机 smoke，全部通过后把 `dist/` 部署到 GitHub Pages，并在 Actions 中留一份可下载的构建包 `shaosong-dist`；也可在 Actions 页手动触发。构建使用相对路径 `base: './'`，因此站点挂在仓库子路径下也能正常加载模型与字体。
 
 ## 运行
 
-需要 Node.js 20+。
+需要 Node.js 20+；`npm run verify:browser` 的 CDP 客户端用内置 WebSocket，需要 Node.js 22+。
 
 ```bash
 npm install
@@ -48,8 +48,9 @@ npm run preview    # 预览构建产物
 | `ground` / `city` | `1` 地表纸纹 / 城池瓦作贴图 | 关 |
 | `units` / `capitals` / `trees` / `mat` | `0` 可逐项关闭对应资产层 | 开 |
 | `motion` / `mute` / `grade` | 动效 / 静音 / 开场页电影感 | `auto` / 关 / 开 |
+| `render=demand` | 省电渲染：只在状态／相机／特效变化时出帧（实验性调试参数） | 连续渲染 |
 
-完整清单见 `src/settings.js`（唯一配置真源，17 项）。优先级 **URL > 浏览器本地存储 > 默认值**；设置面板的改动会同步写回地址栏，链接可直接分享复现。
+完整清单见 `src/settings.js`（唯一配置真源，17 项）。优先级 **URL > 浏览器本地存储 > 默认值**；设置面板的改动会同步写回地址栏，链接可直接分享复现。`render` 是唯一的例外：它是给真机功耗对比用的调试开关，不是用户偏好，因此不进配置表、不出现在设置面板、也不落盘；`encodeSearch()` 会保留无关参数，改设置不会把这个参数冲掉。运行时也可在控制台用 `world.perf.setMode('demand')` 切换，用 `world.perf.stats()` 看帧时与 draw call。
 
 ## 代码结构
 
@@ -66,6 +67,7 @@ npm run preview    # 预览构建产物
 | `src/themes.js` | 展示主题与机位 |
 | `src/ink.js` | 可选的水墨后处理 |
 | `src/economy.js` | 治略玩法（纯数据与纯函数） |
+| `scripts/verify/` | 构建产物体检与无头浏览器实机 smoke（可入库、无凭据） |
 
 两条约定值得留意：攻守系数只有一个出口 `battleParams()`，实战／推演／托管共用；所有掷点走 `GameState.rngState`（mulberry32），故 `?seed=123456` 可复现整局，批量模拟可逐局比对。
 
@@ -75,12 +77,17 @@ npm run preview    # 预览构建产物
 npm test                  # node:test 单元测试
 npm run balance           # 300 局 × 三档难度 + 两剧本，数值护栏回归
 npm run balance:economy   # 治略模式的独立护栏
-npm run build             # 构建（应保持无 >500KB chunk 警告）
+npm run build             # 构建
+npm run verify:dist       # 产物完整性、子路径相对路径、运行时资源与体积预算
+npm run verify:browser    # 无头 Chrome + CDP 实机 smoke（需 Node 22+ 与本机 Chrome）
+npm run verify:browser -- --render=demand   # 同上，回归省电渲染模式
 ```
+
+`vite.config.js` 把 `chunkSizeWarningLimit` 设为 600 KB：three 核心约 530 KB 是第三方固有体积，已单独成块并异步加载，不压首屏关键路径。`verify:dist` 会按 index ≤ 200 KB / world ≤ 100 KB / three ≤ 600 KB / css ≤ 80 KB 的预算逐项复核，超预算直接失败。上述检查除单位测试外都已接入 CI；本机若没有 Chrome，`verify:browser` 会打印 `SKIP` 并以 0 退出，不制造假红灯。
 
 ## 资产
 
-`public/models/` 与 `public/textures/` 的 GLB、贴图由 `scripts/blender/build_*.py` 生成（Blender 5.2 LTS）；字体子集由 `scripts/subset-font.py` 切分。运行时不引入 `GLTFLoader`，改用 `readUnitsGlb()` 自解析 GLB 以避免体积膨胀。城池、树木、旗帜、耕地等用 `InstancedMesh` 合批压低 draw call。
+`public/models/` 与 `public/textures/` 的 GLB、贴图由 `scripts/blender/build_*.py` 生成（Blender 5.2 LTS）；字体子集由 `scripts/subset-font.py` 切分，构建期清单落在 `scripts/subset-manifest.json`（运行时不读，不随站点发布）。首屏只预载正文用的 400 字重，700 字重交给 `font-display: swap` 按需加载。运行时不引入 `GLTFLoader`，改用 `readUnitsGlb()` 自解析 GLB 以避免体积膨胀。城池、树木、旗帜、耕地等用 `InstancedMesh` 合批压低 draw call。
 
 ## 分支
 
@@ -91,4 +98,6 @@ npm run build             # 构建（应保持无 >500KB chunk 警告）
 
 ## 声明
 
-本作品为个人技术练习，题材与人物取材于相关历史小说，**未取得原作 IP 授权**，仅供学习交流，请勿用于商业用途。仓库未附 LICENSE，默认保留所有权利；`three` 与 `vite` 遵循各自许可证。
+本作品为个人技术练习，题材与人物取材于相关历史小说，**未取得原作 IP 授权**，仅供学习交流，请勿用于商业用途。`chixie` 分支是另一部小说的改编实验，授权状态同样未定；线上 Pages 目前只部署 `main` 分支。
+
+**仓库已设为 public，但未附 LICENSE**：按默认著作权规则，公开可见不等于授权使用，复制、修改与再发布仍需事先取得许可；上文「学习交流」只是用途说明，不是授权条款。若希望他人合法复用代码，需另行补一份明确的 LICENSE。字体子集遵循 `public/fonts/OFL.txt`（SIL OFL 1.1），`three` 与 `vite` 遵循各自许可证。

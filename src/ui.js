@@ -572,14 +572,26 @@ export function createUI(root, state, opts = {}) {
     return true;
   }
 
+  // 自动存档原本忽略 writeSave() 的返回值：隐私模式或配额满时会一直
+  // 「逐令自动存档」却什么都没写。失败只提示一次，成功后再允许提示，
+  // 免得托管推演每步弹一条。
+  let saveWarned = false;
+  function writeAutoSave() {
+    if (writeSave(state)) { saveWarned = false; return true; }
+    if (!saveWarned) {
+      saveWarned = true;
+      toast('自动存档失败：本机存储不可用或已满，请用顶栏「册」另存或检查浏览器设置。', 'bad');
+    }
+    return false;
+  }
   function persist() {
     if (!started || state.over) { clearSave(); return; }
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => { if (started && !state.over) writeSave(state); }, 120);
+    saveTimer = setTimeout(() => { if (started && !state.over) writeAutoSave(); }, 120);
   }
   function flushSave() {
     clearTimeout(saveTimer);
-    if (started && !state.over) writeSave(state);
+    if (started && !state.over) writeAutoSave();
   }
 
   // ── 悔棋：快照是纯数据，restore 写回同一实例，listeners 与舆图都不必重建 ──
@@ -905,6 +917,48 @@ export function createUI(root, state, opts = {}) {
   }
 
   // ── 渲染 ──────────────────────────────────────────────────
+  // 左右栏与战报是全量 innerHTML 重绘：焦点、下拉框当前值、滚动位置都会丢。
+  // 每次 render 前后各做一次「记下 → 还原」，键盘操作才不会被一次政令打断。
+  function captureFocus() {
+    const a = document.activeElement;
+    const list = el.log.querySelector('.log-list');
+    const m = {
+      logScroll: list ? list.scrollTop : 0,
+      leftScroll: el.left.scrollTop, rightScroll: el.right.scrollTop,
+      act: null, id: null, cmd: null, city: null, b: null, elementId: null, selectValue: null,
+    };
+    if (!a || a === document.body || !root.contains(a)) return m;
+    m.act = a.dataset?.act || null;
+    m.id = a.dataset?.id || null;
+    m.cmd = a.dataset?.cmd || null;
+    m.city = a.dataset?.city || null;
+    m.b = a.dataset?.b || null;
+    m.elementId = a.id || null;
+    if (a.tagName === 'SELECT' || a.tagName === 'INPUT') m.selectValue = a.value;
+    return m;
+  }
+  function restoreFocus(m) {
+    const list = el.log.querySelector('.log-list');
+    if (list) list.scrollTop = m.logScroll;
+    el.left.scrollTop = m.leftScroll;
+    el.right.scrollTop = m.rightScroll;
+    if (!m.act && !m.elementId) return;
+    let target = null;
+    for (const n of root.querySelectorAll('[data-act], [id]')) {
+      if (m.elementId && n.id === m.elementId) { target = n; break; }
+      if (!m.act || n.dataset?.act !== m.act) continue;
+      if (m.id && n.dataset.id !== m.id) continue;
+      if (m.cmd && n.dataset.cmd !== m.cmd) continue;
+      if (m.city && n.dataset.city !== m.city) continue;
+      if (m.b && n.dataset.b !== m.b) continue;
+      target = n; break;
+    }
+    if (!target || !target.isConnected || target.disabled) return;
+    if (m.selectValue !== null && 'value' in target) target.value = m.selectValue;
+    // 进场后开场页按钮已隐藏，别把焦点塞给不可见元素
+    if (target.getClientRects().length) target.focus({ preventScroll: true });
+  }
+
   function stat(label, value, unit, cls = '') {
     return `<div class="stat ${cls}"><span>${label}</span><b>${value}</b><small>${unit || ''}</small></div>`;
   }
@@ -913,6 +967,7 @@ export function createUI(root, state, opts = {}) {
   }
 
   function render() {
+    const focusMemo = captureFocus();
     const s = state;
     const ecoOn = !!(s.economyOn && s.economy);
     el.era.innerHTML = `<span class="era-main">${esc(s.yearName)}</span><span class="era-sub">${s.scenario ? `<i class="era-tag">${esc(s.scenario.name)}</i>` : ''}第 ${s.turn} / ${s.maxTurns} 回合</span>`;
@@ -1099,6 +1154,7 @@ export function createUI(root, state, opts = {}) {
     world?.setSelection(selected, marchFrom ? s.cities[marchFrom].links : []);
     renderAlerts();
     updateAutoHud();
+    restoreFocus(focusMemo);
   }
 
   // ── 托管推演 ──────────────────────────────────────────────

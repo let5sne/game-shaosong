@@ -36,8 +36,24 @@ jobs:
       - name: 单元测试
         run: npm test
 
+      # 规则层改动不能只看单测：批量模拟的胜率／回合数护栏一起进 CI，
+      # 否则数值漂移时测试全绿照样能上线。两套合计约 25 秒。
+      - name: 数值平衡护栏
+        run: npm run balance && npm run balance:economy
+
       - name: 构建静态站点
         run: npm run build
+
+      # 检查 dist 的引用完整性、子路径相对路径、运行时资源与体积预算
+      - name: 构建产物体检
+        run: npm run verify:dist
+
+      # 无头 Chrome + CDP 的 WebGL smoke；runner 没有浏览器时脚本自行 SKIP
+      - name: 实机 WebGL smoke
+        run: npm run verify:browser
+
+      - name: 省电渲染模式 smoke
+        run: npm run verify:browser -- --render=demand
 
       # 静态资源直接部署，绕过 Jekyll；vite base 为 './'，站点可挂在任意子路径
       - name: 添加 .nojekyll

@@ -461,7 +461,7 @@ function ridgeRing({ r, h, top, bot, op, phase }) {
 }
 
 // ── 主场景 ──────────────────────────────────────────────────
-export function createWorld(container, state, { onPick, quality = 'high', reducedMotion = false, ink = false, tex = false, ctex = false, units = true, capitals = true, trees = true, terrain = 'classic', mat = true } = {}) {
+export function createWorld(container, state, { onPick, quality = 'high', reducedMotion = false, ink = false, tex = false, ctex = false, units = true, capitals = true, trees = true, terrain = 'classic', mat = true, renderMode: initialRenderMode = 'always' } = {}) {
   // 地貌档必须先绑定再生成任何几何：全场景的贴地落点都由 heightAt() 分派。
   const low = quality === 'low';            // 低配：DPR 封顶、关阴影、植被采样减半
   let terrainStyle = setTerrainStyle(TERRAIN_STYLES.includes(terrain) ? terrain : 'classic');
@@ -503,6 +503,16 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
   renderer.shadowMap.enabled = !low;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   container.appendChild(renderer.domElement);
+
+  // 阴影贴图默认只烘一帧（静态场景省掉每帧一遍深度渲染）。但 Blender 资产是
+  // 异步装载的，营帐／旗帜实例矩阵也会随政令变化：这些改动都发生在首帧之后，
+  // 若不显式置脏，新增几何会没有影子或沿用旧影。three 渲完该帧会自行把
+  // needsUpdate 归零，所以一次置脏恰好重烘一帧。
+  let frameDirty = true;                  // 省电渲染模式下的「需要出帧」标记
+  function invalidateShadows() {
+    frameDirty = true;
+    if (renderer.shadowMap.enabled) renderer.shadowMap.needsUpdate = true;
+  }
 
   // 宣纸增强：一次全屏后处理 + 贴地墨晕。?ink=0 可整层旁路，用于 A/B 对比。
   const inkPass = createInkPass(renderer, { enabled: ink });
@@ -886,6 +896,7 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
       im.material = treeMat;
       old.dispose();
     }
+    invalidateShadows();
   }
 
   // ── 高清档：陡坡碎岩 ──
@@ -1111,6 +1122,7 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
       v.group.add(mesh);
       capitalMeshes[id] = mesh;
     }
+    invalidateShadows();
   }
   const siegeSlots = [];
   const siegeMat = new THREE.MeshStandardMaterial({
@@ -1135,9 +1147,19 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
       }
     }
     scene.add(siegeMesh);
+    invalidateShadows();
   }
 
+  // 攻城器具会投影，实例矩阵一变就得重烘阴影；但兵力／阵营没变时不必
+  // 每次 update 都重传 48 份矩阵，也不必多跑一遍深度渲染。
+  let siegeKey = '';
   function updateSiege(s) {
+    const key = CITY_DEFS.map(d => {
+      const c = s.cities[d.id];
+      return `${c.troops >= 11 ? 2 : c.troops >= 8 ? 1 : 0}${c.owner === 'song' ? 'S' : 'J'}`;
+    }).join('');
+    if (key === siegeKey) return;
+    siegeKey = key;
     for (const slot of siegeSlots) {
       const c = s.cities[slot.cityId];
       const shown = c.troops >= 8 ? (c.troops >= 11 ? 2 : 1) : 0;
@@ -1151,6 +1173,7 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
     }
     siegeMesh.instanceMatrix.needsUpdate = true;
     if (siegeMesh.instanceColor) siegeMesh.instanceColor.needsUpdate = true;
+    invalidateShadows();
   }
   const tentGeo = tentGeometry();
   if (matOn) applyVerticalAO(tentGeo, 0.9, 1);
@@ -1278,13 +1301,24 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
     const id = hitTest(ev);
     if (id) onPick(id);
   }
+  // 指针移动可以上百次／秒，raycast 与 getBoundingClientRect 都不该跟着跑：
+  // 每帧至多合并处理一次，只读最后一个位置。
+  let hoverRaf = 0, hoverEv = null;
   function onMove(ev) {
     if (presentation) return;   // 开场页不因悬停城池而改鼠标指针
-    const id = hitTest(ev);
-    if (id !== hovered) {
-      hovered = id;
-      renderer.domElement.style.cursor = id ? 'pointer' : 'grab';
-    }
+    hoverEv = { clientX: ev.clientX, clientY: ev.clientY };
+    if (hoverRaf) return;
+    hoverRaf = requestAnimationFrame(() => {
+      hoverRaf = 0;
+      const e = hoverEv;
+      hoverEv = null;
+      if (!e || presentation) return;
+      const id = hitTest(e);
+      if (id !== hovered) {
+        hovered = id;
+        renderer.domElement.style.cursor = id ? 'pointer' : 'grab';
+      }
+    });
   }
   renderer.domElement.addEventListener('pointerdown', onDown);
   renderer.domElement.addEventListener('pointerup', onUp);
@@ -1346,6 +1380,10 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
       if (tentMesh.instanceColor) tentMesh.instanceColor.needsUpdate = true;
     }
     if (siegeMesh) updateSiege(s);
+    // 城池归属、朱批圈、名牌与营帐都变了：省电模式下必须补一帧。
+    // 这里刻意不调 invalidateShadows()——营帐与旗帜不投影，逐令重烘
+    // 会额外多一遍深度渲染，且会污染实机 draw call 断言。
+    frameDirty = true;
   }
   function setSelection(id, targets = []) {
     selectedId = id;
@@ -1480,13 +1518,22 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
   const clock = new THREE.Clock();
   let elapsed = 0;
   let shadowBaked = false;
+  // 帧时观测（只读）与可选省电渲染。出厂默认 'always'：连续出帧，
+  // 与既有 CDP 断言、像素 A/B 基线逐字节一致。'demand' 只在状态／相机／
+  // 特效变化时出帧，由 world.perf.setMode() 或 ?render=demand 显式开启。
+  let renderMode = initialRenderMode === 'demand' ? 'demand' : 'always';
+  const frameTimes = [];
+  const marchP = new THREE.Vector3(), marchAhead = new THREE.Vector3();
   function tick() {
     const dt = Math.min(clock.getDelta(), 0.05);
+    if (frameTimes.length >= 120) frameTimes.shift();
+    frameTimes.push(dt * 1000);
     // 减弱动效只停装饰动画；相机聚焦、行军与战报特效仍须正常播完
     const animDt = still ? 0 : dt;
     elapsed += animDt;
     uTime.value = elapsed;
-    controls.update();
+    // OrbitControls 带阻尼：update() 返回 true 表示相机这一帧仍在收敛。
+    const controlsChanged = controls.update();
 
     if (camTween) {
       camTween.t = Math.min(1, camTween.t + dt * camTween.speed);
@@ -1511,20 +1558,23 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
       b.line.rotation.y = -a + Math.PI / 2;
     }
 
+    // setRing() 把透明环整层退出渲染队列，这里也只对可见环做明灭，
+    // 省掉每帧 24×3 次写材质与 Math.sin（全图通常只有个位数环可见）。
     for (const id in cityViews) {
       const v = cityViews[id];
-      if (v.selRing.material.opacity > 0) v.selRing.material.opacity = 0.65 + Math.sin(elapsed * 4) * 0.3;
-      if (v.reachRing.material.opacity > 0) v.reachRing.material.opacity = 0.55 + Math.sin(elapsed * 3.2) * 0.3;
+      if (v.selRing.visible) v.selRing.material.opacity = 0.65 + Math.sin(elapsed * 4) * 0.3;
+      if (v.reachRing.visible) v.reachRing.material.opacity = 0.55 + Math.sin(elapsed * 3.2) * 0.3;
       // 朱批圈缓缓明灭；系统「减弱动效」时 elapsed 不递增，自然静止
-      if (v.goalRing.material.opacity > 0) v.goalRing.material.opacity = 0.54 + Math.sin(elapsed * 2.4) * 0.20;
+      if (v.goalRing.visible) v.goalRing.material.opacity = 0.54 + Math.sin(elapsed * 2.4) * 0.20;
     }
 
     for (let i = marches.length - 1; i >= 0; i--) {
       const a = marches[i];
       a.t += dt / a.dur;
       const k = Math.min(1, a.t);
-      a.g.position.copy(a.curve.getPoint(k));
-      const ahead = a.curve.getPoint(Math.min(1, k + 0.02));
+      // getPoint 支持 optionalTarget：行军每帧两次取点不再新建 Vector3
+      a.g.position.copy(a.curve.getPoint(k, marchP));
+      const ahead = a.curve.getPoint(Math.min(1, k + 0.02), marchAhead);
       a.g.lookAt(ahead);
       a.g.scale.setScalar(1 + Math.sin(k * Math.PI) * 0.30);
       if (k >= 1) {
@@ -1543,7 +1593,13 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
       if (k >= 1) { scene.remove(f.mesh); f.mesh.material.dispose(); fx.splice(i, 1); }
     }
 
-    inkPass.render(scene, camera);
+    const busy = !!controlsChanged || !!camTween || marches.length > 0 || fx.length > 0;
+    // 省电模式只在有变化时出帧；装饰动画随之停在最后一次出帧的状态，
+    // 交互／运镜／行军／特效期间仍连续渲染，不会漏掉任何过渡帧。
+    if (renderMode === 'always' || frameDirty || busy) {
+      inkPass.render(scene, camera);
+      frameDirty = false;
+    }
     // 光源与城池均为静态，阴影贴图烘一次即可，省掉每帧一遍深度渲染
     if (!shadowBaked) { shadowBaked = true; renderer.shadowMap.autoUpdate = false; }
   }
@@ -1554,20 +1610,32 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
     renderer.setAnimationLoop(null);
   });
   renderer.domElement.addEventListener('webglcontextrestored', () => {
+    // 上下文重建后阴影贴图是全新的，而 autoUpdate 早已被关掉：
+    // 必须重新打开一帧，否则整幅画面从此没有影子。
+    renderer.shadowMap.autoUpdate = true;
     shadowBaked = false;
+    invalidateShadows();
     renderer.setAnimationLoop(tick);
   });
 
+  // window.resize 与 ResizeObserver 会先后各触发一次；尺寸/DPR 没变时
+  // 不再重设 drawing buffer（setSize 即便同尺寸也会清空画布，白闪一帧）。
+  let lastW = 0, lastH = 0, lastDpr = 0;
   function resize() {
     const w = container.clientWidth, h = container.clientHeight;
     if (!w || !h) return;
+    const dpr = Math.min(window.devicePixelRatio || 1, dprCap);
+    if (w === lastW && h === lastH && dpr === lastDpr) return;
+    lastW = w; lastH = h;
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, dprCap));
+    if (dpr !== lastDpr) { renderer.setPixelRatio(dpr); lastDpr = dpr; }
     renderer.setSize(w, h);
+    frameDirty = true;
   }
   window.addEventListener('resize', resize);
-  new ResizeObserver(resize).observe(container);
+  const resizeObserver = new ResizeObserver(resize);
+  resizeObserver.observe(container);
 
   update(state);
 
@@ -1601,8 +1669,9 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
       // 质感层的淡落影独立于墨晕开关：关掉宣纸增强不能把默认落影一起带走
       contactInk.visible = !!on || matOn;
       contactInk.material.opacity = on ? CONTACT_STRONG : CONTACT_SOFT;
+      frameDirty = true;
     },
-    setStrength(s) { inkPass.setStrength(s); },
+    setStrength(s) { inkPass.setStrength(s); frameDirty = true; },
     info() { return { enabled: inkPass.enabled, ...inkPass.info() }; },
     dispose() { inkPass.dispose(); },
   };
@@ -1633,10 +1702,51 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
     },
   };
 
-  return {
+  /** 只读帧时观测 + 可选省电模式；默认 'always'，不改变任何既有观感。 */
+  const perfCtl = {
+    get mode() { return renderMode; },
+    setMode(mode) {
+      renderMode = mode === 'demand' ? 'demand' : 'always';
+      frameDirty = true;
+      return renderMode;
+    },
+    requestRender() { frameDirty = true; },
+    stats() {
+      const sorted = [...frameTimes].sort((a, b) => a - b);
+      const at = q => sorted.length ? sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))] : 0;
+      return {
+        mode: renderMode, samples: frameTimes.length,
+        p50: +at(0.5).toFixed(2), p95: +at(0.95).toFixed(2),
+        drawCalls: renderer.info.render.calls, triangles: renderer.info.render.triangles,
+        pixelRatio: renderer.getPixelRatio(),
+      };
+    },
+  };
+
+  /** 单页只建一次世界，但 HMR／未来场景重建需要能干净地解绑。 */
+  function dispose() {
+    renderer.setAnimationLoop(null);
+    window.removeEventListener('resize', resize);
+    resizeObserver.disconnect();
+    renderer.domElement.removeEventListener('pointerdown', onDown);
+    renderer.domElement.removeEventListener('pointerup', onUp);
+    renderer.domElement.removeEventListener('pointermove', onMove);
+    if (hoverRaf) cancelAnimationFrame(hoverRaf);
+    inkCtl.dispose();
+  }
+
+  const api = {
     update, setSelection, focusCity, resetCamera, march, shock, resize,
     flyTo, applyTheme, clearTheme, setPresentation, setPreviewMarks, exitPresentation,
     camera, controls, renderer, scene, quality, terrain: terrainStyle,
-    ink: inkCtl, assets: assetCtl,
+    ink: inkCtl, assets: assetCtl, perf: perfCtl, dispose,
   };
+  // 省电模式下，任何对外调用都算一次状态变化，保证下一帧一定出图；
+  // 'always' 模式下这些赋值不影响原有行为。
+  for (const key of Object.keys(api)) {
+    const fn = api[key];
+    if (typeof fn !== 'function' || key === 'dispose') continue;
+    api[key] = (...args) => { frameDirty = true; return fn(...args); };
+  }
+  return api;
 }

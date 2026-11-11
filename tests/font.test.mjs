@@ -8,7 +8,8 @@ import { readFileSync, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 
 const FONT_DIR = 'public/fonts/';
-const manifest = JSON.parse(readFileSync(FONT_DIR + 'subset-manifest.json', 'utf8'));
+// 清单是构建期产物，已从 public/ 移到 scripts/：不随站点发布。
+const manifest = JSON.parse(readFileSync('scripts/subset-manifest.json', 'utf8'));
 const css = readFileSync('src/style.css', 'utf8');
 const html = readFileSync('index.html', 'utf8');
 
@@ -71,9 +72,11 @@ test('CSS 双权重 @font-face、字体栈首位与系统回退', () => {
   assert.match(css, /"SimSun", serif;/);   // 子集未收录字仍能逐字符回退
 });
 
-test('index.html 预载两份字体，避免首屏字形跳变', () => {
-  for (const f of manifest.fonts) {
-    assert.ok(html.includes(`href="/fonts/${f.file}"`), `未预载 ${f.file}`);
-    assert.match(html, /as="font" type="font\/woff2" crossorigin/);
-  }
+test('index.html 只预载 400 字重，700 交给 font-display:swap 按需加载', () => {
+  const [regular, bold] = manifest.fonts;
+  assert.ok(html.includes(`href="/fonts/${regular.file}"`), '正文 400 必须预载，否则首屏字形跳变');
+  assert.match(html, /as="font" type="font\/woff2" crossorigin/);
+  assert.ok(!html.includes(`href="/fonts/${bold.file}"`), '700 不应抢占首屏关键路径带宽');
+  assert.match(css, /font-weight: 700;/);
+  assert.match(css, /font-display: swap/);
 });
