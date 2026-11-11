@@ -701,24 +701,51 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
   scene.add(contactInk);
 
   // ── 海面 + 流动波光 ──
+  // 水面菲涅尔共用 uniform：天光色（线性空间）与强度；主题换天色时同步
+  const waterSkyUniform = { value: new THREE.Color(SKY) };
+  const waterFresnelUniform = { value: 0.55 };
   // 起伏放到 vertex shader：原先每帧在 CPU 改 957 个顶点并重传整个 VBO
-  const seaGeo = new THREE.PlaneGeometry(W, D, 32, 28);
+  const seaGeo = new THREE.PlaneGeometry(W, D, 64, 56);
   seaGeo.rotateX(-Math.PI / 2);
   seaGeo.translate(CX, WATER_Y, CZ);
+  // 水深色：按 WATER_Y - heightAt 给顶点上色，近岸浅青、外海深青。
+  // 水面是「一层薄水盖在地形上」，深浅必须跟地形走，否则大海是一块纯色亚克力。
+  {
+    const pos = seaGeo.attributes.position;
+    const col = new Float32Array(pos.count * 3);
+    const shallowC = new THREE.Color(0xa8c8c4), deepC = new THREE.Color(0x3d7590), tmp = new THREE.Color();
+    for (let i = 0; i < pos.count; i++) {
+      const depth = Math.max(0, WATER_Y - heightAt(pos.getX(i), pos.getZ(i)));
+      const t = Math.min(1, depth / 2.6);
+      tmp.copy(shallowC).lerp(deepC, t * t);
+      col[i * 3] = tmp.r; col[i * 3 + 1] = tmp.g; col[i * 3 + 2] = tmp.b;
+    }
+    seaGeo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  }
   const seaMat = new THREE.MeshStandardMaterial({
-    color: 0x89aeb6, transparent: true, opacity: 0.82, roughness: 0.30, metalness: 0.10,
+    color: 0xffffff, vertexColors: true, transparent: true, opacity: 0.82, roughness: 0.30, metalness: 0.10,
     depthWrite: false, side: THREE.DoubleSide,
   });
   seaMat.onBeforeCompile = shader => {
     shader.uniforms.uTime = uTime;
+    shader.uniforms.uWaterSky = waterSkyUniform;
+    shader.uniforms.uWaterFresnel = waterFresnelUniform;
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nuniform float uTime;')
       .replace('#include <begin_vertex>', `#include <begin_vertex>
         transformed.y += sin(position.x * 0.24 + uTime * 0.9) * 0.055
           + cos(position.z * 0.29 + uTime * 0.7) * 0.045;
       `);
+    // 菲涅尔：掠射角更亮（映到天空），垂直俯视仍是水的本色。
+    // 没有环境贴图，标准材质的镜面只有太阳一个亮点，水面会像塑料；这一项是补天光的关键。
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform vec3 uWaterSky;\nuniform float uWaterFresnel;')
+      .replace('#include <opaque_fragment>', `
+        float waterFres = pow(1.0 - clamp(dot(normalize(normal), normalize(vViewPosition)), 0.0, 1.0), 3.0);
+        outgoingLight = mix(outgoingLight, uWaterSky, waterFres * uWaterFresnel);
+        #include <opaque_fragment>`);
   };
-  seaMat.customProgramCacheKey = () => 'shaosong-sea-wave';
+  seaMat.customProgramCacheKey = () => 'shaosong-sea-wave-fresnel';
   const sea = new THREE.Mesh(seaGeo, seaMat);
   sea.renderOrder = 1;
   scene.add(sea);
@@ -726,6 +753,26 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
   waterTexSea.repeat.set(7, 7);
   const waterTexRiver = makeWaterTexture();
   waterTexRiver.repeat.set(1, 1);
+
+  // 水面法线（scripts/blender/build_water.py 烘的可平铺图）：海面与河面各克隆一份，
+  // 靠 offset 平移做出「涌浪漂移／河水下流」，不新增 draw call、不改几何。
+  // low 档不挂：水面是大面积半透明层，法线采样会加重低端机的像素填充。
+  let seaNormal = null, riverNormal = null;
+  const waterNormal = hd
+    ? new THREE.TextureLoader().load(new URL('textures/water-normal.png', document.baseURI).href)
+    : null;
+  if (waterNormal) {
+    waterNormal.colorSpace = THREE.NoColorSpace;
+    waterNormal.wrapS = waterNormal.wrapT = THREE.RepeatWrapping;
+    waterNormal.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
+    seaNormal = waterNormal.clone();
+    seaNormal.needsUpdate = true;
+    seaNormal.repeat.set(9, 7);
+    seaMat.normalMap = seaNormal;
+    seaMat.normalScale.set(0.55, 0.55);
+    seaMat.roughness = 0.22;
+    seaMat.needsUpdate = true;
+  }
   const shimmerGeo = new THREE.PlaneGeometry(W, D, 1, 1);
   shimmerGeo.rotateX(-Math.PI / 2);
   shimmerGeo.translate(CX, WATER_Y + 0.018, CZ);
@@ -741,7 +788,8 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
   for (let ri = 0; ri < RIVER_SAMPLES.length; ri++) {
     const r = RIVER_SAMPLES[ri], pts = riverLinePts[ri], hw = r.def.width;
     banks.push(ribbonGeometry(pts, hw * 1.62, 0.015, 0xa9a184, 0, WATER_Y - 0.08, true));
-    surfaces.push(ribbonGeometry(pts, hw, 0.05, r.def.color, 0, WATER_Y + 0.01, true));
+    // 水面给到 uvScale=0.12：v 沿河道递增，法线才能随 offset 平移做出「下流」
+    surfaces.push(ribbonGeometry(pts, hw, 0.05, r.def.color, 0.12, WATER_Y + 0.01, true));
     glints.push(ribbonGeometry(pts, hw * 0.94, 0.075, 0xffffff, 0.16, WATER_Y + 0.03, true));
   }
   const matTape = (hex, opacity) => new THREE.MeshStandardMaterial({
@@ -751,6 +799,27 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
   const bankMesh = new THREE.Mesh(mergeAll(banks), matTape(0xffffff, 0.55));
   bankMesh.renderOrder = 2; scene.add(bankMesh);
   const riverMesh = new THREE.Mesh(mergeAll(surfaces), matTape(0xffffff, 0.92));
+  if (waterNormal) {
+    riverNormal = waterNormal.clone();
+    riverNormal.needsUpdate = true;
+    riverNormal.repeat.set(1, 1);
+    riverMesh.material.normalMap = riverNormal;
+    riverMesh.material.normalScale.set(0.7, 0.7);
+    riverMesh.material.roughness = 0.42;
+    riverMesh.material.needsUpdate = true;
+  }
+  // 河面同样补菲涅尔：俯视是河水色，掠射时映天光（强度略低于海面，避免整条河发白）
+  riverMesh.material.onBeforeCompile = shader => {
+    shader.uniforms.uWaterSky = waterSkyUniform;
+    shader.uniforms.uWaterFresnel = waterFresnelUniform;
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform vec3 uWaterSky;\nuniform float uWaterFresnel;')
+      .replace('#include <opaque_fragment>', `
+        float waterFres = pow(1.0 - clamp(dot(normalize(normal), normalize(vViewPosition)), 0.0, 1.0), 3.0);
+        outgoingLight = mix(outgoingLight, uWaterSky, waterFres * uWaterFresnel * 0.7);
+        #include <opaque_fragment>`);
+  };
+  riverMesh.material.customProgramCacheKey = () => 'shaosong-river-fresnel';
   riverMesh.renderOrder = 3; scene.add(riverMesh);
   const glintMesh = new THREE.Mesh(mergeAll(glints), new THREE.MeshBasicMaterial({
     map: waterTexRiver, vertexColors: true, transparent: true, opacity: 0.62,
@@ -902,6 +971,22 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
     treeMat = new THREE.MeshStandardMaterial({
       vertexColors: true, flatShading: true, roughness: 1, side: THREE.DoubleSide,
     });
+    // 风：按实例位置取相位，树冠越高摆幅越大；只看树冠不看树干（position.y 为物体空间高度）。
+    // 不新增 draw call / program 之外的开销：顶点着色器里两行三角函数。
+    treeMat.onBeforeCompile = shader => {
+      shader.uniforms.uTime = uTime;
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', '#include <common>\nuniform float uTime;')
+        .replace('#include <begin_vertex>', `#include <begin_vertex>
+          #ifdef USE_INSTANCING
+            float treePhase = instanceMatrix[3].x * 0.35 + instanceMatrix[3].z * 0.27;
+            float treeAmp = smoothstep(0.8, 6.5, position.y) * 0.16;
+            transformed.x += sin(uTime * 1.15 + treePhase) * treeAmp;
+            transformed.z += cos(uTime * 0.93 + treePhase * 1.3) * treeAmp * 0.7;
+          #endif
+        `);
+    };
+    treeMat.customProgramCacheKey = () => 'shaosong-tree-wind';
     for (const [kind, name] of Object.entries(TREE_MESHES)) {
       const im = vegMeshes[kind], geo = geos[name];
       if (!im || !geo) continue;
@@ -1492,6 +1577,7 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
     hemi.intensity = s.hemiIntensity; ambient.intensity = s.ambientIntensity;
     fill.color.setHex(s.fillColor); fill.intensity = s.fillIntensity;
     renderer.toneMappingExposure = s.exposure;
+    waterSkyUniform.value.setHex(s.bg);      // 水面菲涅尔映的天光跟着天色走
   }
   /** 每次先从原始快照还原再叠加，故连续切主题幂等；light 缺省字段沿用当前档默认值。 */
   function applyTheme(theme) {
@@ -1503,6 +1589,7 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
     if (L.sky !== undefined) {
       scene.background.setHex(L.sky);
       scene.fog.color.setHex(L.sky);
+      waterSkyUniform.value.setHex(L.sky);
     }
     if (L.fogScale !== undefined) {
       scene.fog.near = themeSnapshot.fogNear * L.fogScale;
@@ -1546,6 +1633,9 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
     const animDt = still ? 0 : dt;
     elapsed += animDt;
     uTime.value = elapsed;
+    // 水面法线平移：海面缓慢漂移，河面沿 v 向下游流（still 时 elapsed 不涨，自然静止）
+    if (seaNormal) seaNormal.offset.set(elapsed * 0.0042, elapsed * 0.0027);
+    if (riverNormal) riverNormal.offset.y = -elapsed * 0.055;
     // OrbitControls 带阻尼：update() 返回 true 表示相机这一帧仍在收敛。
     const controlsChanged = controls.update();
 
