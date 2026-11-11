@@ -12,12 +12,18 @@
     "balance": "node scripts/simulate.mjs 300 --all --check",
     "balance:economy": "node scripts/simulate.mjs 100 --all --check --economy",
     "verify:dist": "node scripts/verify/dist-smoke.mjs",
-    "verify:browser": "node scripts/verify/browser-smoke.mjs"
+    "verify:browser": "node scripts/verify/browser-smoke.mjs",
+    "verify:browser:mobile": "node scripts/verify/browser-smoke.mjs --mobile",
+    "lint": "eslint ."
+  },
+  "engines": {
+    "node": ">=22"
   },
   "dependencies": {
     "three": "^0.180.0"
   },
   "devDependencies": {
+    "eslint": "^9.39.5",
     "vite": "^6.3.5"
   }
 }

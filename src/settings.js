@@ -24,7 +24,6 @@ export const SOURCE_LABEL = { url: '链接指定', saved: '已保存', default: 
 const yes = v => v === true || v === '1' || v === 1;
 const pick = (v, list) => list.includes(v) ? v : undefined;
 const DIFF_IDS = DIFFICULTIES.map(d => d.id);
-const SCEN_IDS = SCENARIOS.map(s => s.id);
 
 /** ?tex / ?ctex 是一对历史遗留的联动开关，单独解码会丢语义 */
 function texDecode(which) {

@@ -36,6 +36,10 @@ jobs:
       - name: 单元测试
         run: npm test
 
+      # 未定义变量／未使用变量／重复声明：build 不会报，重构时最容易悄悄引入
+      - name: 代码检查
+        run: npm run lint
+
       # 规则层改动不能只看单测：批量模拟的胜率／回合数护栏一起进 CI，
       # 否则数值漂移时测试全绿照样能上线。两套合计约 25 秒。
       - name: 数值平衡护栏
@@ -54,6 +58,10 @@ jobs:
 
       - name: 省电渲染模式 smoke
         run: npm run verify:browser -- --render=demand
+
+      # 窄屏 390×844：验证 autoQuality 自动降档、760px 布局生效、无横向溢出
+      - name: 窄屏 WebGL smoke
+        run: npm run verify:browser:mobile
 
       # 静态资源直接部署，绕过 Jekyll；vite base 为 './'，站点可挂在任意子路径
       - name: 添加 .nojekyll

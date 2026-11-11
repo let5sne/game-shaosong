@@ -1,12 +1,13 @@
 /**
  * 最小实机 smoke：无头 Chrome + Node 22 内置 WebSocket 直连 CDP，零新增依赖。
  *
- * 用法：npm run build && npm run verify:browser [url]
+ * 用法：npm run build && npm run verify:browser [url] [--render=demand] [--mobile]
  *   默认自动拉起 vite preview（127.0.0.1:4173）；传 URL 则验证该地址、不启本地服务。
  *   CHROME_PATH 可覆盖浏览器路径；找不到 Chrome 或 Node < 22 时打印 SKIP 并以 0 退出，
  *   便于在没有浏览器的 runner 上安全跳过，不制造假红灯。
  *
  * 覆盖：DOM 就绪 / 三维挂载 / WebGL / glError / 打包 chunk / GLB 与贴图 / 控制台错误。
+ *   --mobile 额外覆盖窄屏路径：390×844@3x + 触摸模拟、autoQuality 自动降档、760px 布局生效、无横向溢出。
  * 不含像素 A/B、draw call 断言与任何部署地址；那部分仍留在本机私有脚本里。
  */
 import { spawn } from 'node:child_process';
@@ -16,11 +17,16 @@ import { join } from 'node:path';
 
 // --render=demand 用来回归省电模式（只在状态变化时出帧）仍能正常挂载与出图。
 // 无头环境的 hardwareConcurrency / deviceMemory 常把 autoQuality 判成 low，
-// 而 low 档按设计会跳过 trees.glb 与高清地表贴图。默认锁 high 才能覆盖完整资产链路。
-const ARG = process.argv[2];
-const EXTERNAL_URL = ARG && !ARG.startsWith('--') ? ARG : null;
-const URL = EXTERNAL_URL
-  || `http://127.0.0.1:4173/?seed=123456&quality=high${ARG === '--render=demand' ? '&render=demand' : ''}`;
+// 而 low 档按设计会跳过 trees.glb 与高清地表贴图。桌面用例默认锁 high 才能覆盖完整资产链路。
+const FLAGS = process.argv.slice(2).filter(a => a.startsWith('--'));
+const ARG = process.argv.slice(2).find(a => !a.startsWith('--'));
+const EXTERNAL_URL = ARG || null;
+const MOBILE = FLAGS.includes('--mobile');       // 窄屏：验证自动降档与抽屉布局
+const DEMAND = FLAGS.includes('--render=demand'); // 省电渲染
+// 移动用例刻意**不锁** quality：main.js 的 autoQuality 会因窄屏判 low，
+// 这条用例要验的正是「窄屏 → 自动降档 → 简化资产」这条真实路径，锁 high 就绕过了它。
+const BASE = 'http://127.0.0.1:4173/?seed=123456';
+const URL = EXTERNAL_URL || `${BASE}${MOBILE ? '' : '&quality=high'}${DEMAND ? '&render=demand' : ''}`;
 const PORT = 9224;
 const CDP = `http://127.0.0.1:${PORT}`;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -153,6 +159,13 @@ try {
   });
   s = new Session(ws);
   await Promise.all(['Runtime.enable', 'Log.enable', 'Network.enable', 'Page.enable'].map(m => s.send(m)));
+  // 设备模拟必须在导航之前设置，否则首帧的媒体查询与 autoQuality 用的是桌面视口。
+  if (MOBILE) {
+    await s.send('Emulation.setDeviceMetricsOverride', {
+      width: 390, height: 844, deviceScaleFactor: 3, mobile: true,
+    });
+    await s.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+  }
   await s.send('Page.navigate', { url: URL });
 
   check(await waitFor(s, 'document.readyState === "complete"'), 'DOM ready');
@@ -192,6 +205,25 @@ try {
   check(count(/\.glb($|\?)/) >= wantGlb, `${probe.quality} 档 GLB ≥ ${wantGlb}`, String(count(/\.glb($|\?)/)));
   check(count(/\.png($|\?)/) >= wantPng, `${probe.quality} 档贴图 ≥ ${wantPng}`, String(count(/\.png($|\?)/)));
   check(count(/shaosong-serif-400\.woff2/) > 0, '400 字重已加载');
+
+  // 窄屏专项：媒体查询、自动降档、顶栏紧凑布局、无横向溢出、触摸可用。
+  if (MOBILE) {
+    const m = await evaluate(s, `(() => {
+      const bar = document.querySelector('.topbar');
+      return {
+        narrow: matchMedia('(max-width: 760px)').matches,
+        quality: window.__shaosong?.quality ?? '?',
+        topbarH: bar ? bar.getBoundingClientRect().height : -1,
+        overflow: document.documentElement.scrollWidth - window.innerWidth,
+        touch: 'ontouchstart' in window,
+      };
+    })()`);
+    check(m.narrow, '窄屏媒体查询命中 760px');
+    check(m.quality === 'low', '窄屏自动降档为 low', String(m.quality));
+    check(m.topbarH > 0 && m.topbarH <= 60, '窄屏顶栏紧凑生效', `${m.topbarH.toFixed(1)}px`);
+    check(m.overflow <= 1, '无横向溢出', `${m.overflow}px`);
+    check(m.touch, '触摸模拟已启用');
+  }
 
   const errs = s.errors();
   check(errs.length === 0, '控制台零错误', errs.slice(0, 3).map(e => e.method).join(', '));
