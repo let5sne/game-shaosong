@@ -1,6 +1,6 @@
 import {
   CITY_DEFS, HEROES, EVENTS, TERRAIN_DEFENSE, TERRAIN_LABEL, DIFFICULTIES,
-  SCENARIOS, findScenario, riverBetween,
+  findScenario, riverBetween,
 } from './data.js';
 import {
   economyActive, createEconomy, buildingLevels, buildCost, BUILDINGS,

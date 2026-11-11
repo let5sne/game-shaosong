@@ -14,7 +14,7 @@ import assert from 'node:assert/strict';
 import { GameState } from '../src/rules.js';
 import {
   serialize, restore, readSave, writeSave, clearSave, saveInfo,
-  SAVE_KEY, SLOT_KEY, ACTIVE_KEY, SAVE_SLOTS, slotKeyId,
+  SAVE_KEY, SAVE_SLOTS, slotKeyId,
   activeSlot, setActiveSlot, bestSlot, slotSummaries, migrateLegacy,
 } from '../src/save.js';
 

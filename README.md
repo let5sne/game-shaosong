@@ -14,7 +14,7 @@
 
 ## 运行
 
-需要 Node.js 20+；`npm run verify:browser` 的 CDP 客户端用内置 WebSocket，需要 Node.js 22+。
+需要 Node.js 22+（`.nvmrc` 为准）；`verify:browser` 的 CDP 客户端用内置 WebSocket，低于 22 会自行 SKIP。浏览器侧无版本要求，任意支持 WebGL 的现代浏览器即可。
 
 ```bash
 npm install
@@ -68,6 +68,7 @@ npm run preview    # 预览构建产物
 | `src/ink.js` | 可选的水墨后处理 |
 | `src/economy.js` | 治略玩法（纯数据与纯函数） |
 | `scripts/verify/` | 构建产物体检与无头浏览器实机 smoke（可入库、无凭据） |
+| `eslint.config.js` | ESLint 扁平配置：只守未定义／未使用／重复声明／不可达 |
 
 两条约定值得留意：攻守系数只有一个出口 `battleParams()`，实战／推演／托管共用；所有掷点走 `GameState.rngState`（mulberry32），故 `?seed=123456` 可复现整局，批量模拟可逐局比对。
 
@@ -77,15 +78,17 @@ npm run preview    # 预览构建产物
 
 ```bash
 npm test                  # node:test 单元测试
+npm run lint              # ESLint：未定义/未使用变量、重复声明、不可达代码
 npm run balance           # 300 局 × 三档难度 + 两剧本，数值护栏回归
 npm run balance:economy   # 治略模式的独立护栏
 npm run build             # 构建
 npm run verify:dist       # 产物完整性、子路径相对路径、运行时资源与体积预算
 npm run verify:browser    # 无头 Chrome + CDP 实机 smoke（需 Node 22+ 与本机 Chrome）
 npm run verify:browser -- --render=demand   # 同上，回归省电渲染模式
+npm run verify:browser:mobile              # 同上，390×844@3x 窄屏：自动降档与抽屉布局
 ```
 
-`vite.config.js` 把 `chunkSizeWarningLimit` 设为 600 KB：three 核心约 530 KB 是第三方固有体积，已单独成块并异步加载，不压首屏关键路径。`verify:dist` 会按 index ≤ 200 KB / world ≤ 100 KB / three ≤ 600 KB / css ≤ 80 KB 的预算逐项复核，超预算直接失败。上述检查除单位测试外都已接入 CI；本机若没有 Chrome，`verify:browser` 会打印 `SKIP` 并以 0 退出，不制造假红灯。
+`vite.config.js` 把 `chunkSizeWarningLimit` 设为 600 KB：three 核心约 530 KB 是第三方固有体积，已单独成块并异步加载，不压首屏关键路径。`verify:dist` 会按 index ≤ 200 KB / world ≤ 100 KB / three ≤ 600 KB / css ≤ 80 KB 的预算逐项复核，超预算直接失败。上述检查已全部接入 CI（`.github/workflows/deploy.yml`）；本机若没有 Chrome，`verify:browser` 会打印 `SKIP` 并以 0 退出，不制造假红灯。
 
 ## 资产
 
