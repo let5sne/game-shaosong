@@ -6,8 +6,8 @@
 //
 // 色彩管线要点（three r180）：渲染进 WebGLRenderTarget 时，WebGLPrograms 会把
 // toneMapping 设为 NoToneMapping、outputColorSpace 设为 LinearSRGB，因此 RT 里是
-// linear HDR；全屏 quad 渲到屏幕时 three 才会注入 toneMapping()。故此处显式做
-// ACES（复用注入函数）+ sRGB 编码，保证 ?ink=0/1 两版亮度一致。
+// linear HDR；全屏 quad 渲到屏幕时 three 才会注入 toneMapping()。故此处复用注入的
+// toneMapping()（默认 Khronos PBR Neutral）+ sRGB 编码，保证 ?ink=0/1 两版亮度一致。
 
 import * as THREE from 'three';
 

@@ -69,7 +69,9 @@ test('季节光色在安全区间：不把画面压黑，也不过曝', () => {
     }
     assert.ok(L.fogScale >= 0.7 && L.fogScale <= 1.1, `${id}.fogScale 越界`);
     assert.ok(L.sunMul >= 0.7 && L.sunMul <= 1.3, `${id}.sunMul 越界`);
-    assert.ok(L.exposure >= 1.1 && L.exposure <= 1.45, `${id}.exposure 越界`);
+    // 曝光是绝对乘数，量程跟着渲染曲线走：ACES 1.28 时主题落在 1.24~1.30，
+    // 换 Khronos PBR Neutral（基准 1.52）后同比例上抬到 1.47~1.54。
+    assert.ok(L.exposure >= 1.1 && L.exposure <= 1.75, `${id}.exposure 越界`);
     if (L.sunPos) assert.equal(L.sunPos.length, 3);
   }
 });

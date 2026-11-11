@@ -38,7 +38,8 @@ export const SCENE_THEMES = Object.freeze({
       sky: 0xdfe7dc, fogScale: 0.86,
       sunColor: 0xf1f5dc, sunMul: 0.88,
       hemi: [0xe9f0e2, 0x596b52], ambientMul: 1.04,
-      exposure: 1.24,
+      // 曝光是绝对值，故随渲染曲线一起换算：ACES 1.28 → Neutral 1.52 时同比例上抬
+      exposure: 1.47,
     }),
   },
   yancheng: {
@@ -53,7 +54,8 @@ export const SCENE_THEMES = Object.freeze({
       sky: 0xeadfc4, fogScale: 0.94,
       sunColor: 0xffd6a0, sunMul: 1.08, sunPos: [-64, 44, 38],
       hemi: [0xfff0d6, 0x7a6a4a], ambientMul: 0.94,
-      exposure: 1.30,
+      // 同上：ACES 1.30 在 Neutral 下等效约 1.54
+      exposure: 1.54,
     }),
   },
 });
