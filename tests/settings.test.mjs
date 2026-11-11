@@ -94,7 +94,7 @@ test('优先级：URL 显式 > 已保存 > 默认，并如实标注来源', () =
 });
 
 test('战局是链接级指令：择关记忆键不能劫持裸链接', () => {
-  // 开场页点剧本会写 shaosong.scenario（便捷预选）；主 store 里也可能有旧值。
+  // 开场页点剧本会写 chixie.scenario（便捷预选）；主 store 里也可能有旧值。
   // 两者都不得让 ?seed=123456 这样的裸链接被强制加载剧本关。
   const store = makeStore({
     [LEGACY_KEYS.scenario]: 'shunchang',

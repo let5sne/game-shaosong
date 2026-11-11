@@ -10,7 +10,9 @@
     "simulate": "node scripts/simulate.mjs",
     "test": "node --test",
     "balance": "node scripts/simulate.mjs 300 --all --check",
-    "balance:economy": "node scripts/simulate.mjs 100 --all --check --economy"
+    "balance:economy": "node scripts/simulate.mjs 100 --all --check --economy",
+    "verify:dist": "node scripts/verify/dist-smoke.mjs",
+    "verify:browser": "node scripts/verify/browser-smoke.mjs"
   },
   "dependencies": {
     "three": "^0.180.0"

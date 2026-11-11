@@ -22,6 +22,10 @@ const cfg = derive(settings.values, { systemReducedMotion, autoQuality: autoQual
 const { quality, reducedMotion, ink, atmos, vista, units, tex, ctex, capitals, trees, terrain, mat, grade, economy } = cfg;
 const fixedSeed = cfg.seed;                 // ?seed=123456 固定局号：变局、战斗、事件全由此派生
 const initialScenario = cfg.scenario;       // ?scenario=shunchang 预选短剧本
+// 实验性省电渲染（?render=demand）：只在状态／相机／特效变化时出帧。
+// 这是调试与真机功耗对比用的开关，不是用户偏好，故不进 settings.js 的配置表，
+// 也不出现在设置面板；encodeSearch 会保留无关查询参数，切换设置不会把它冲掉。
+const demandRender = new URLSearchParams(location.search).get('render') === 'demand';
 
 // 首屏只依赖 CSS + 规则层 + UI：开场页与状态条先画出来，
 // three.js 与整套程序化建模走异步 chunk，不再压在首屏关键路径上。
@@ -42,7 +46,7 @@ sceneEl.innerHTML = '<div class="scene-loading">三 维 舆 图 展 开 中 …<
 window.__shaosong = {
   state, ui, world: null, fixedSeed, initialScenario, worldReady: null,
   quality, reducedMotion, ink, atmos, vista, units, tex, ctex, capitals, trees, terrain, mat, grade, economy,
-  settings, derived: cfg,
+  renderMode: demandRender ? 'demand' : 'always', settings, derived: cfg,
 };
 
 // 设置面板改动渲染参数后重载：若原本在对局中，自动续回原局面，不把官家踢回开场页。
@@ -58,7 +62,7 @@ async function mountWorld() {
   try {
     const { createWorld } = await import('./world.js');
     sceneEl.replaceChildren();
-    const world = createWorld(sceneEl, state, { onPick: id => ui.handlePick(id), quality, reducedMotion, ink, atmos, vista, units, tex, ctex, capitals, trees, terrain, mat });
+    const world = createWorld(sceneEl, state, { onPick: id => ui.handlePick(id), quality, reducedMotion, ink, atmos, vista, units, tex, ctex, capitals, trees, terrain, mat, renderMode: demandRender ? 'demand' : 'always' });
     window.__shaosong.world = world;
     ui.attachWorld(world);
     return world;

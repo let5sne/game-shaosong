@@ -186,7 +186,7 @@ button:disabled { cursor: not-allowed; }
 .jump-row { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
 .jump-row span { font-size: 10px; letter-spacing: 2px; color: var(--muted); white-space: nowrap; }
 .jump-row select { flex: 1; min-width: 0; font-family: var(--serif); font-size: 13px; padding: 5px 7px; background: rgba(255,255,255,.62); border: 1px solid var(--line); border-radius: 2px; color: var(--ink); }
-.jump-row select:focus { outline: none; border-color: var(--red); }
+.jump-row select:focus { border-color: var(--red); }
 
 /* commands */
 .decree-pip { margin-left: auto; font-size: 10px; color: var(--red); letter-spacing: 1px; }
@@ -587,7 +587,7 @@ kbd { font-family: var(--sans); font-size: 10px; padding: 1px 5px; border: 1px s
   width: 108px; padding: 5px 8px; font-size: 11px; font-family: ui-monospace, Consolas, monospace;
   color: var(--ink); background: rgba(255,255,255,.6); border: 1px solid var(--line); border-radius: 2px;
 }
-.set-input:focus { outline: none; border-color: var(--red); }
+.set-input:focus { border-color: var(--red); }
 .set-tags { display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end; }
 .set-src, .set-fx, .set-wait {
   font-size: 9px; letter-spacing: .5px; padding: 2px 5px; border: 1px solid var(--line); white-space: nowrap;
@@ -1099,4 +1099,13 @@ span.alert-chip { cursor: default; }
   .guide-box { bottom: 14% !important; }
   .save-slot { grid-template-columns: 1fr; }
   .ss-btns { grid-column: 1; grid-row: auto; justify-content: flex-start; }
+}
+
+/* 键盘焦点：原先 .set-input / .jump-row select 直接 outline:none，
+   Tab 到按钮后完全看不到落点。:focus-visible 只在键盘／辅助技术操作时出现，
+   鼠标点击不受影响；配合 render() 的焦点还原，快捷键链路才算完整。 */
+button:focus-visible, select:focus-visible, input:focus-visible,
+a:focus-visible, [tabindex]:focus-visible {
+  outline: 2px solid var(--red);
+  outline-offset: 2px;
 }
