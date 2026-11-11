@@ -12,7 +12,7 @@ import {
 } from './models.js';
 import { HOME_POSE, VISTA_POSE } from './themes.js';
 import {
-  NEAR_LOD, nearFactor as lodNearFactor, detailFactor as lodDetailFactor,
+  nearFactor as lodNearFactor, detailFactor as lodDetailFactor,
   labelScaleK as lodLabelScaleK, ringFadeK, statusVisible,
 } from './lod.js';
 import { createInkPass, makeContactInk, makeInkTexture } from './ink.js';
