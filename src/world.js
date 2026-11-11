@@ -1000,6 +1000,9 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
     const list = groves[kind];
     const im = new THREE.InstancedMesh(g, vegMat, Math.max(1, list.length));
     vegMeshes[kind] = im;
+    // 树投影：森林靠「树影落地」才有体积。岩石不投（形状不规则，投影读成脏斑）。
+    // 阴影图是静态烘的（首帧后 autoUpdate=false），因此这 17 万三角只在换树库/换归属时重烘一次。
+    im.castShadow = kind !== 'rock';
     list.forEach((p, i) => {
       dummy.position.set(p.x, p.y, p.z);
       dummy.rotation.set(0, p.rot, 0);
