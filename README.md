@@ -71,6 +71,8 @@ npm run preview    # 预览构建产物
 
 两条约定值得留意：攻守系数只有一个出口 `battleParams()`，实战／推演／托管共用；所有掷点走 `GameState.rngState`（mulberry32），故 `?seed=123456` 可复现整局，批量模拟可逐局比对。
 
+改动边界与提案判据见 [AGENTS.md](./AGENTS.md)。
+
 ## 验证
 
 ```bash
