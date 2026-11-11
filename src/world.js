@@ -531,7 +531,7 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
   controls.target.set(0, 0, -3);
   controls.enableDamping = true;
   controls.dampingFactor = 0.075;
-  controls.minDistance = 34;
+  controls.minDistance = 20;
   controls.maxDistance = 185;
   controls.minPolarAngle = 0.18;
   controls.maxPolarAngle = 1.36;
