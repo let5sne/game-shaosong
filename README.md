@@ -96,7 +96,7 @@ npm run verify:browser:mobile              # 同上，390×844@3x 窄屏：自�
 
 ## 资产
 
-`public/models/` 与 `public/textures/` 的 GLB、贴图由 `scripts/blender/build_*.py` 生成（Blender 5.2 LTS）；字体子集由 `scripts/subset-font.py` 切分，构建期清单落在 `scripts/subset-manifest.json`（运行时不读，不随站点发布）。首屏只预载正文用的 400 字重，700 字重交给 `font-display: swap` 按需加载。运行时不引入 `GLTFLoader`，改用 `readUnitsGlb()` 自解析 GLB 以避免体积膨胀。城池、树木、旗帜、耕地等用 `InstancedMesh` 合批压低 draw call。
+`public/models/` 与 `public/textures/` 的 GLB、贴图由 `scripts/blender/build_*.py` 生成（Blender 5.3.0）；字体子集由 `scripts/subset-font.py` 切分，构建期清单落在 `scripts/subset-manifest.json`（运行时不读，不随站点发布）。首屏只预载正文用的 400 字重，700 字重交给 `font-display: swap` 按需加载。运行时不引入 `GLTFLoader`，改用 `readUnitsGlb()` 自解析 GLB 以避免体积膨胀。城池、树木、旗帜、耕地等用 `InstancedMesh` 合批压低 draw call。
 
 ## 分支
 
