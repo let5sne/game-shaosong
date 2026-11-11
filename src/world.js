@@ -15,6 +15,10 @@ import { createInkPass, makeContactInk, makeInkTexture } from './ink.js';
 const W = 116, D = 100, CX = -2, CZ = -3;
 const WATER_Y = 0.42;
 const SEG_X = 120, SEG_Z = 104;
+// 地表质感层烘图时的单侧压暗均值（scripts/blender/build_terrain_macro.py 的 TARGET_MEAN = 0.885）。
+// 乘性遮罩无法提亮，故用材质色补回；1/0.885 = 1.13 在 ACES 高光肩部被压缩，实测仍偏暗
+// （近景 -3.5%、全景 -1.2%），校准到 1.25 时两个机位的平均明度都与改动前持平。
+const DETAIL_COMP = 1.25;
 const FLAG_W = 1.56, FLAG_H = 0.98;
 // 两京主角级增饰：GLB 网格名 → 城池 id。对应胜利目标「收复开封与燕京」，
 // 两者都是 tier 2 重檐规格，故可共用同一套举折曲面参数。
@@ -637,8 +641,9 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
   scene.add(land);
   if (!hd) geo.dispose();
 
-  // 地表细节：高清档用 Blender 烘的岩纹／草甸皴纹高密度平铺，提供近景颗粒；
-  // 原味档用淡宣纸纸纹（可选项）。两者都是乘性灰度遮罩，不做 sRGB 解码。
+  // 地表细节：高清档用 Blender 烘的宏尺度质感层（能量集中在 4~32 周/贴图，
+  // 见 scripts/blender/build_terrain_macro.py）；原味档用淡宣纸纸纹（可选项）。
+  // 两者都是乘性灰度遮罩，不做 sRGB 解码。
   if (hd) {
     const detail = new THREE.TextureLoader().load(new URL('textures/terrain-detail.png', document.baseURI).href);
     detail.colorSpace = THREE.NoColorSpace;
@@ -663,6 +668,9 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
     } else {
       land.material.normalScale.set(0.42, 0.42);
     }
+    // 乘性遮罩只能压暗、不能提亮，烘图时已按 DETAIL_MEAN 单侧压暗出起伏；
+    // 这里用材质色补回，等价于「局部有起伏、整幅平均明度不变」。
+    land.material.color.setScalar(DETAIL_COMP);
     land.material.needsUpdate = true;
   } else if (groundTex) {
     const paper = new THREE.TextureLoader().load(new URL('textures/paper.png', document.baseURI).href);
