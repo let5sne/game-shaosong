@@ -61,7 +61,11 @@ npm run preview    # 预览构建产物
 | `src/autoplay.js` | 托管推演 |
 | `src/save.js` | 存档与多槽管理 |
 | `src/settings.js` | 唯一配置真源：URL / 存储参数集中一张表 |
-| `src/ui.js` | DOM 界面 |
+| `src/ui.js` | DOM 界面与交互（HUD、状态→DOM 唯一出口、托管循环） |
+| `src/ui-template.js` | HUD 模板、玩法略要、首局引导文案（纯字符串） |
+| `src/ui-format.js` | 纯展示计算：转义、百分比、条块、预警派生（无 DOM） |
+| `src/ui-audio.js` | 音效与静音位 |
+| `src/ui-saves.js` | 存档三卷面板 |
 | `src/world.js` | three.js 三维舆图（异步挂载） |
 | `src/models.js` | 程序化几何与 GLB 解析 |
 | `src/themes.js` | 展示主题与机位 |

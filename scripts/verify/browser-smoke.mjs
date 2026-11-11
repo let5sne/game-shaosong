@@ -208,19 +208,29 @@ try {
 
   // 窄屏专项：媒体查询、自动降档、顶栏紧凑布局、无横向溢出、触摸可用。
   if (MOBILE) {
+    // 开场页用 #ui.intro-active .hud{display:none} 整层收起 HUD，此时顶栏 rect 恒为 0，
+    // 量不到 760px 下的紧凑布局。临时摘掉该 class 量一次真实渲染高度再还原，
+    // 既不改变被测状态，也不削弱断言（HUD 真被隐藏时仍会量到 0）。
     const m = await evaluate(s, `(() => {
       const bar = document.querySelector('.topbar');
+      const ui = document.getElementById('ui');
+      const intro = !!(ui && ui.classList.contains('intro-active'));
+      if (intro) ui.classList.remove('intro-active');
+      const h = bar ? bar.getBoundingClientRect().height : -1;
+      if (intro) ui.classList.add('intro-active');
       return {
         narrow: matchMedia('(max-width: 760px)').matches,
         quality: window.__shaosong?.quality ?? '?',
-        topbarH: bar ? bar.getBoundingClientRect().height : -1,
+        topbarH: h,
+        intro,
         overflow: document.documentElement.scrollWidth - window.innerWidth,
         touch: 'ontouchstart' in window,
       };
     })()`);
     check(m.narrow, '窄屏媒体查询命中 760px');
     check(m.quality === 'low', '窄屏自动降档为 low', String(m.quality));
-    check(m.topbarH > 0 && m.topbarH <= 60, '窄屏顶栏紧凑生效', `${m.topbarH.toFixed(1)}px`);
+    check(m.topbarH > 0 && m.topbarH <= 60, '窄屏顶栏紧凑生效',
+      `${m.topbarH.toFixed(1)}px${m.intro ? '（开场页临时露出 HUD 后测得）' : ''}`);
     check(m.overflow <= 1, '无横向溢出', `${m.overflow}px`);
     check(m.touch, '触摸模拟已启用');
   }
