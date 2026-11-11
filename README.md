@@ -6,6 +6,12 @@
 
 运行时只依赖 `three` 一个包。规则层是不碰 DOM 的纯函数，因此同一局可以完全脱离浏览器、在 Node 里从头跑到尾。
 
+## 在线体验
+
+无需本地安装，直接打开 **https://let5sne.github.io/game-shaosong/** 即可试玩。
+
+站点由 `.github/workflows/deploy.yml` 自动发布：每次推送 `main` 都会执行 `npm ci` → `npm test` → `npm run build`，测试全绿后把 `dist/` 部署到 GitHub Pages，并在 Actions 中留一份可下载的构建包 `shaosong-dist`；也可在 Actions 页手动触发。构建使用相对路径 `base: './'`，因此站点挂在仓库子路径下也能正常加载模型与字体。
+
 ## 运行
 
 需要 Node.js 20+。

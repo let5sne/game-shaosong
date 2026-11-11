@@ -1,0 +1,77 @@
+name: 构建并发布到 GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# deploy-pages 需要 OIDC 与 Pages 写权限
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 只允许一个部署在跑；不取消进行中的部署，避免站点半成品
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: 测试与打包
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 配置 Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 单元测试
+        run: npm test
+
+      - name: 构建静态站点
+        run: npm run build
+
+      # 静态资源直接部署，绕过 Jekyll；vite base 为 './'，站点可挂在任意子路径
+      - name: 添加 .nojekyll
+        run: touch dist/.nojekyll
+
+      - name: 上传可下载的构建包
+        uses: actions/upload-artifact@v4
+        with:
+          name: shaosong-dist
+          path: dist/
+          retention-days: 14
+
+      - name: 配置 Pages
+        uses: actions/configure-pages@v5
+
+      - name: 上传 Pages 构件
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist/
+
+      - name: 写入构建摘要
+        run: |
+          echo "### 构建产物" >> "$GITHUB_STEP_SUMMARY"
+          du -sh dist >> "$GITHUB_STEP_SUMMARY"
+          echo "文件数: $(find dist -type f | wc -l)" >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    name: 发布上线
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: 部署到 GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
