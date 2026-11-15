@@ -461,6 +461,13 @@ button:disabled { cursor: not-allowed; }
 .intro-actions .btn-primary.big { width: 100%; padding: 13px 18px; font-size: 18px; }
 .intro-settings-link { align-self: center; }
 .intro-foot { margin-top: auto; font-size: 10px; letter-spacing: 1px; line-height: 1.7; color: #7d7563; }
+/* Language entry on the opening page: one visible link, switched by the document lang
+   that main.js sets before the UI renders. Both labels stay ASCII so English mode has no CJK. */
+.intro-lang-link { align-self: center; margin-top: 2px; font-size: 12px; letter-spacing: 2px;
+  color: var(--ink-2); border-bottom: 1px solid var(--line); }
+.intro-lang-link.lang-zh { display: none; }
+html[lang="en"] .intro-lang-link.lang-en { display: none; }
+html[lang="en"] .intro-lang-link.lang-zh { display: inline; }
 .btn-primary {
   background: linear-gradient(100deg, #a0342a, #c2553d); color: #fdf0d8; border: 1px solid rgba(240,200,150,.45);
   font-family: var(--serif); font-size: 16px; letter-spacing: 4px; padding: 11px 30px; border-radius: 2px;

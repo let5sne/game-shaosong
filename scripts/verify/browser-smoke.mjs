@@ -183,8 +183,14 @@ try {
       quality: window.__register?.world?.quality ?? 'high',
       renderMode: window.__register?.renderMode ?? 'always',
       perfMode: window.__register?.world?.perf?.mode ?? 'always',
+      langLinks: [...document.querySelectorAll('.intro-lang-link')]
+        .filter(a => getComputedStyle(a).display !== 'none')
+        .map(a => a.textContent.trim()),
     };
   })()`);
+  const wantLangLabel = (LANG_EN || URL.includes('lang=en')) ? 'Chinese' : 'English';
+  check(probe.langLinks.length === 1 && probe.langLinks[0] === wantLangLabel,
+    `开场页语言入口 = ${wantLangLabel}`, probe.langLinks.join(', ') || '无');
   const wantMode = URL.includes('render=demand') ? 'demand' : 'always';
   check(probe.renderMode === wantMode && probe.perfMode === wantMode,
     `渲染模式 = ${wantMode}`, `${probe.renderMode} / ${probe.perfMode}`);

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <!-- Social share card for The Register. Source asset; rendered to public/og-image.png
+       with: rsvg-convert assets/og-image.svg -o public/og-image.png -->
+  <rect width="1200" height="630" fill="#f2ead8"/>
+  <rect x="28" y="28" width="1144" height="574" fill="none" stroke="#cfc3aa" stroke-width="2"/>
+  <rect x="38" y="38" width="1124" height="554" fill="none" stroke="#e3d7bd" stroke-width="1"/>
+
+  <rect x="80" y="80" width="88" height="88" rx="8" fill="#a8392f"/>
+  <text x="124" y="152" font-family="Georgia, 'Times New Roman', serif" font-size="66" fill="#f7eed9" text-anchor="middle">R</text>
+
+  <text x="80" y="292" font-family="Georgia, 'Times New Roman', serif" font-size="94" letter-spacing="2" fill="#2c2a23">The Register</text>
+  <text x="84" y="352" font-family="Georgia, 'Times New Roman', serif" font-size="29" letter-spacing="9" fill="#8a5a3c">A PAPER CAMPAIGN</text>
+
+  <line x1="80" y1="392" x2="1120" y2="392" stroke="#cfc3aa" stroke-width="2"/>
+  <text x="80" y="452" font-family="Georgia, 'Times New Roman', serif" font-size="28" fill="#55503f">A deterministic turn-based strategy game about the weight of decisions.</text>
+  <text x="80" y="498" font-family="Georgia, 'Times New Roman', serif" font-size="28" fill="#55503f">Limited decrees, fragile supply lines, one seed that replays every consequence.</text>
+  <text x="1120" y="562" font-family="Georgia, 'Times New Roman', serif" font-size="22" fill="#857c67" text-anchor="end">24 prefectures  ·  three-year mandate  ·  no hidden dice</text>
+</svg>

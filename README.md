@@ -2,6 +2,8 @@
 
 > **The Register · A Paper Campaign** — 原创架空回合制战略游戏
 
+> **English:** *The Register · A Paper Campaign* is an original single-page turn-based strategy game: twenty-four prefectures on a paper map, limited decrees, fragile supply lines, and one seed that replays every consequence. No backend, no account, no analytics; MIT licensed. [Play in English](https://let5sne.github.io/game-shaosong/?lang=en) · [Privacy & Licenses](https://let5sne.github.io/game-shaosong/privacy.html).
+
 一个用 three.js 做的、打开浏览器就能玩的单页 3D 回合制战略游戏。舆图上铺开 24 座州郡、4 条河与 17 处津渡，每回合只有数道「政令」可用：整军、筹粮、拜将、督军、进军、和议。用兵先算粮，粮道一断孤军便受困；廷骑秋冬南牧，春夏才是北进的窗口。
 
 目标是在三年期限内收复旧都开封与燕京，并把北廷压到 3 州以内，使版籍重归一体。
@@ -12,9 +14,9 @@
 
 ## 在线体验
 
-无需本地安装，直接打开 **https://let5sne.github.io/game-shaosong/** 即可试玩。
+无需本地安装，直接打开 **https://let5sne.github.io/game-shaosong/** 即可试玩；英文版用 **https://let5sne.github.io/game-shaosong/?lang=en**，开场页也有 `English` 入口，英文模式下可切回 `Chinese`。
 
-站点由 `.github/workflows/deploy.yml` 自动发布：每次推送 `main` 都会执行 `npm ci` → 单元测试 → 代码检查 → 英文覆盖率门禁 → 数值平衡护栏 → `npm run build` → 构建产物体检 → 无头 Chrome 实机 smoke（常规／省电／窄屏／英文四种），全部通过后把 `dist/` 部署到 GitHub Pages，并在 Actions 中留一份可下载的构建包 `register-dist`；也可在 Actions 页手动触发。构建使用相对路径 `base: './'`，因此站点挂在仓库子路径下也能正常加载模型与字体。
+站点由 `.github/workflows/deploy.yml` 自动发布：每次推送 `main` 都会执行 `npm ci` → 单元测试 → 代码检查 → 英文覆盖率门禁 → 数值平衡护栏 → `npm run build` → 构建产物体检 → 无头 Chrome 实机 smoke（常规／省电／窄屏／英文四种），全部通过后把 `dist/` 部署到 GitHub Pages，并在 Actions 中留一份可下载的构建包 `register-dist`；也可在 Actions 页手动触发。构建使用相对路径 `base: './'`，因此站点挂在仓库子路径下也能正常加载模型与字体。社交分享图由 `assets/og-image.svg` 生成到 `public/og-image.png`（1200×630）；`index.html` 的 `og:image` 写的是本站绝对地址，抓取器不解析相对地址，改仓库名或换站点时须同步改这一行。
 
 ## 运行
 

@@ -44,6 +44,7 @@ const RUNTIME = [
   'fonts/OFL.txt',
 ];
 for (const p of RUNTIME) check(existsSync(join(DIST, p)) && size(p) > 0, `运行时资源：${p}`);
+check(existsSync(join(DIST, 'og-image.png')) && size('og-image.png') > 0, '分享卡图片已发布');
 check(!existsSync(join(DIST, 'fonts/subset-manifest.json')),
   '构建期清单未随站点发布', 'subset-manifest.json 应只留在 scripts/');
 
