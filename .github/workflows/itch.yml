@@ -1,0 +1,89 @@
+# itch.io 发布：只手动触发，绝不随 push 自动上线。
+# Pages 由 deploy.yml 负责；这里只做 HTML5 打包与 butler 上传。
+name: Publish to itch.io
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '版本号，传给 butler --userversion；留空则由 butler 自增'
+        required: false
+        default: ''
+        type: string
+      channel:
+        description: 'itch channel 名'
+        required: true
+        default: 'html5'
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      # 与 Pages 流水线同一套护栏：数值漂移或英文覆盖率回退都不许发布
+      - name: 单元测试
+        run: npm test
+      - name: 代码检查
+        run: npm run lint
+      - name: 英文覆盖率严格门禁
+        run: npm run i18n:audit:strict
+      - name: 数值平衡护栏
+        run: npm run balance
+      - name: 经济档平衡护栏
+        run: npm run balance:economy
+
+      - name: 构建
+        run: npm run build
+      - name: 构建产物体检
+        run: npm run verify:dist
+      # itch HTML5 跑在跨源 iframe 里：验证存档、URL 参数与地址写回
+      - name: 跨源 iframe smoke
+        run: npm run verify:iframe
+      - name: 生成 HTML5 包
+        run: npm run itch:package
+
+      # broth 的固定地址取最新稳定版；两个域名互为备用，避免单点失效
+      - name: 安装 butler
+        run: |
+          set -e
+          for u in \
+            "https://broth.itch.zone/butler/linux-amd64/LATEST/archive/default" \
+            "https://broth.itch.ovh/butler/linux-amd64/LATEST/archive/default"; do
+            if curl -fsSL -o butler.zip "$u"; then break; fi
+          done
+          unzip -o butler.zip
+          chmod +x butler
+          ./butler -V
+
+      - name: 推送到 itch.io
+        env:
+          BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+          ITCH_TARGET: ${{ vars.ITCH_USER }}/${{ vars.ITCH_GAME }}
+          ITCH_CHANNEL: ${{ inputs.channel }}
+          ITCH_VERSION: ${{ inputs.version }}
+          BUTLER_PATH: ./butler
+        run: npm run itch:publish
+
+      - name: 保留可复核的上传包
+        uses: actions/upload-artifact@v4
+        with:
+          name: register-html5
+          path: output/register-html5.zip
+          retention-days: 14
+
+      - name: 写入摘要
+        run: |
+          echo "### itch.io 上传包" >> "$GITHUB_STEP_SUMMARY"
+          sha256sum output/register-html5.zip >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "上传后仍需在网页端：Kind 设为 HTML、标记 channel 浏览器可玩、设置可见性。" >> "$GITHUB_STEP_SUMMARY"

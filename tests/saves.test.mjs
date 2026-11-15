@@ -8,6 +8,7 @@
  *   3. bestSlot 取最近更新的可续档（终局／坏档不算）
  *   4. slotSummaries 给 UI 的三卷摘要（空卷／终局／坏档／宋州计数）
  *   5. clearSave 只清目标槽
+ *   6. 存储被阻断（跨源 iframe / 隐私模式）时各入口静默降级
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -142,4 +143,28 @@ test('clearSave 只清目标槽，restore 往返仍成立', () => {
   assert.equal(restore(fresh, readSave(3)), true);
   assert.equal(fresh.seed, 13);
   assert.ok(Array.isArray(fresh.logs));
+});
+
+// itch HTML5 是跨源 iframe；浏览器策略可能直接让 localStorage 访问抛错。
+// 此时游戏必须仍能开局，只是不再有续局能力，不能出现异常。
+test('存储被阻断：所有存档入口静默降级，不抛错', () => {
+  const original = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    get() { throw new Error('access denied'); },
+  });
+  try {
+    assert.equal(writeSave(game(9)), false);
+    assert.equal(readSave(), null);
+    assert.equal(readSave(2), null);
+    assert.equal(bestSlot(), null);
+    assert.deepEqual(slotSummaries(), []);
+    assert.equal(migrateLegacy(), false);
+    assert.equal(activeSlot(), 1);
+    assert.doesNotThrow(() => clearSave(1));
+    assert.doesNotThrow(() => setActiveSlot(2));
+  } finally {
+    if (original) Object.defineProperty(globalThis, 'localStorage', original);
+    else delete globalThis.localStorage;
+  }
 });

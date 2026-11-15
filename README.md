@@ -97,8 +97,10 @@ npm run preview    # 预览构建产物
 | `src/themes.js` | 展示主题与机位 |
 | `src/ink.js` | 可选的水墨后处理 |
 | `src/economy.js` | 治略玩法（纯数据与纯函数） |
-| `scripts/verify/` | 构建产物体检与无头浏览器实机 smoke（可入库、无凭据） |
+| `scripts/verify/` | 构建产物体检、无头浏览器与跨源 iframe 实机 smoke（可入库、无凭据） |
 | `scripts/i18n-audit.mjs` | 英文覆盖率审计与待补词条清单 |
+| `scripts/itch-package.mjs` | HTML5 打包与包内校验（零依赖 ZIP，输出到 `output/`） |
+| `scripts/itch-publish.mjs` | butler 上传封装（凭据只经环境变量传入） |
 | `eslint.config.js` | ESLint 扁平配置：只守未定义／未使用／重复声明／不可达 |
 
 两条约定值得留意：攻守系数只有一个出口 `battleParams()`，实战／推演／托管共用；所有掷点走 `GameState.rngState`（mulberry32），故 `?seed=123456` 可复现整局，批量模拟可逐局比对。
@@ -120,9 +122,36 @@ npm run verify:browser    # 无头 Chrome + CDP 实机 smoke（需 Node 22+ 与�
 npm run verify:browser -- --render=demand   # 同上，回归省电渲染模式
 npm run verify:browser:mobile              # 同上，390×844@3x 窄屏：自动降档与抽屉布局
 npm run verify:browser:en                  # 英文版实机 smoke：文档语言、标题、门面与中文残留计数
+npm run verify:iframe                      # 跨源 iframe 实机：存档、URL 参数、地址写回、控制台
+npm run itch:package                      # 从 dist/ 生成 HTML5 包（output/register-html5.zip）
+npm run itch:publish                      # butler 上传（需环境变量，见下节）
 ```
 
 `vite.config.js` 把 `chunkSizeWarningLimit` 设为 600 KB：three 核心约 530 KB 是第三方固有体积，已单独成块并异步加载，不压首屏关键路径；英文覆盖表文本量大且随译文增补，也单独拆成 `locale-en` 块，避免把 index 主包顶过预算。`verify:dist` 会按 index ≤ 200 KB / world ≤ 100 KB / three ≤ 600 KB / locale-en ≤ 60 KB / css ≤ 80 KB 的预算逐项复核，且要求 `locale-en` 必须存在，超预算或拆分失效直接失败。上述检查已全部接入 CI（`.github/workflows/deploy.yml`）；本机若没有 Chrome，`verify:browser` 会打印 `SKIP` 并以 0 退出，不制造假红灯。
+
+## itch.io 发布（P3）
+
+**itch.io 的 REST API 不能发布项目。** 官方文档 `https://itch.io/docs/api/overview` 只列 Server-side API、OAuth、JavaScript、Widget 与 RSS 五类；其中 Server-side API 的参考页写明是「查询账号与游戏信息」，端点全为 GET：`/credentials/info`、`/profile`、`/profile/games`、`/games/{id}/download_keys`、`/games/{id}/purchases`、`/wharf/latest`（最后一个不需凭据）。没有创建项目页、改元数据或上传构建的端点。新版用 `https://api.itch.io/...` 加 `Authorization: Bearer KEY`，旧版 `https://itch.io/api/1/{KEY}/...` 仍可用；账号设置页生成的 key 是 unscoped，可访问全部端点，且没有仅发布权限的凭据，须当密码保管。
+
+上传构建走 **butler**（Wharf 协议），与 Pages 流水线分开：
+
+1. **网页端建页**（不可自动化）：`itch.io/game/new`，Kind 选 HTML，记下 `user/game` 两段地址。butler 不会代为创建项目页。
+2. 在账号设置页生成 API key，确认可用于上传；把它作为仓库 Secret `BUTLER_API_KEY`，另把 `ITCH_USER`、`ITCH_GAME` 设为仓库变量。绝不写入仓库，也绝不打印到日志。
+3. 本地发布：
+
+   ```bash
+   npm run build && npm run verify:dist && npm run verify:iframe && npm run itch:package
+   BUTLER_API_KEY=... ITCH_TARGET=user/game npm run itch:publish -- --dry-run
+   BUTLER_API_KEY=... ITCH_TARGET=user/game npm run itch:publish
+   ```
+
+   `butler` 需在 PATH 中，或用 `BUTLER_PATH` 指定；`ITCH_CHANNEL` 默认 `html5`，`ITCH_VERSION` 传给 `--userversion`。默认上传源是 `dist/` 目录：butler 对目录做增量更新，推 zip 会让每次改动都重传整包；zip 是可复核快照，也供网页端手动上传，需要改源用 `ITCH_SOURCE` 指定。
+4. `.github/workflows/itch.yml` **只手动触发**，跑完整套护栏后安装包、上传，并保留一份可复核的 zip 产物；不会随 push 自动上线。
+5. **网页端收尾**（不可自动化）：首次推送后把该 channel 标记为「浏览器可玩」，设置可见性、封面、截图与定价；这些都不在 API 内。
+
+**打包契约**：`npm run itch:package` 把 `dist/` 内容作为 zip 根（`index.html` 必须在根），用 Node 内置写 store 模式 ZIP，时间戳固定，同一份 dist 每次生成的 sha256 相同。脚本还校验引用均为相对路径、无本机绝对路径、关键资源齐全、满足 itch HTML5 的文件数与体积限制（≤1000 文件、解压后 ≤500 MB、单文件 ≤200 MB、路径 ≤240 字符），并回读 zip 目录逐项自证。`vite base: './'` 的子路径契约正好适配 itch 容器。
+
+**iframe 验证**：`npm run verify:iframe` 用两个不同 host 起外层页面与游戏，构成跨源容器，实测 `?seed` / `?lang=en` 透传、`localStorage` 写入读回、`history.replaceState` 写回、三维挂载与控制台零错误；单测另覆盖存储被阻断时的静默降级。这些结论只对当前浏览器策略成立，Safari 与 itch 真实容器仍需真人实测。另需注意 `index.html` 的 `og:image` 写死 Pages 绝对地址，在 itch 上不影响运行；改仓库名或域名须同步这一行。
 
 ## 资产
 
