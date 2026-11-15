@@ -1,4 +1,4 @@
-"""《绍宋》地表树木 —— 在 Blender 内通过 MCP 执行。
+"""《版籍》地表树木 —— 在 Blender 内通过 MCP 执行。
 
 替换 world.js 里 pineGeometry()/broadGeometry() 的光滑圆锥与二十面体球。
 目标不是照片级 PBR（贴到宣纸沙盘上反而降质），而是让远景林线的轮廓破碎、

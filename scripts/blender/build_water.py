@@ -1,4 +1,4 @@
-"""《绍宋》水面法线 —— 在 Blender 内执行：
+"""《版籍》水面法线 —— 在 Blender 内执行：
     blender -b --factory-startup -P scripts/blender/build_water.py
 
 产物：public/textures/water-normal.png（256²、可平铺、NoColorSpace）

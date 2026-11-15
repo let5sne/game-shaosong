@@ -101,7 +101,7 @@ test('bestSlot 取最近更新的可续档；终局档不可续', () => {
 test('slotSummaries：空卷／正常卷／终局卷／坏档一目了然', () => {
   globalThis.localStorage = mkStore();
   const s = game(11);
-  // 占两座金城造出 22 宋州局面，验证计数
+  // 占两座北城造出 22 行台州局面，验证计数
   const ids = Object.keys(s.cities);
   const songBefore = ids.filter(id => s.cities[id].owner === 'song').length;
   const jin = ids.filter(id => s.cities[id].owner === 'jin').slice(0, 2);

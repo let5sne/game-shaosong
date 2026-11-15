@@ -128,7 +128,7 @@ export function createUI(root, state, opts = {}) {
       <div class="sd-poem">${esc(t.poem)}</div>
       <p class="sd-brief">${esc(t.brief)}</p>
       <div class="sd-meta">
-        <div><b>军令</b><span>${esc(sc ? scenarioGoalText(sc) : '收复开封与燕京，尽逐金人')}</span></div>
+        <div><b>军令</b><span>${esc(sc ? scenarioGoalText(sc) : '收复开封与燕京，尽逐北军')}</span></div>
         <div><b>舆图</b><span>${t.marks.length ? `${t.marks.length} 处朱批焦点 · 择关即移镜` : '全图二十四州郡'}</span></div>
       </div>
       <div class="sd-hint">点左侧战局卡片，舆图即移到该关山川形势</div>`;
@@ -209,7 +209,7 @@ export function createUI(root, state, opts = {}) {
       const info = best.info;
       const label = info.scenarioId
         ? (SCENARIOS.find(x => x.id === info.scenarioId)?.name || '短剧本')
-        : (DIFFICULTIES.find(d => d.id === info.difficulty)?.name || '建炎北伐');
+        : (DIFFICULTIES.find(d => d.id === info.difficulty)?.name || '承平本色');
       el.continueBtn.textContent = `续上一局 · ${label} 第 ${info.turn} 回合 · #${info.seed || ''}`;
     }
     applySceneTheme();
@@ -559,7 +559,7 @@ export function createUI(root, state, opts = {}) {
     return `<section class="card forecast">
       <div class="card-eyebrow">进兵推演 <span class="decree-pip">自 ${esc(from.name)} 出 ${send} 营</span></div>
       <div class="fc-list">${rows}</div>
-      <p class="card-note">渡河须另备舟楫：多耗一道政令与粮秣，攻势受挫；水师都督或御驾亲征可免政令。孤军无继、连营犄角、都督驻节与战法地形，皆已计入上列胜算。按 <kbd>Esc</kbd> 取消。</p>
+      <p class="card-note">渡河须另备舟楫：多耗一道政令与粮秣，攻势受挫；水师都督或执政亲临可免政令。孤军无继、连营犄角、都督驻节与战法地形，皆已计入上列胜算。按 <kbd>Esc</kbd> 取消。</p>
     </section>`;
   }
 
@@ -708,11 +708,11 @@ export function createUI(root, state, opts = {}) {
         ${obj.items ? `<div class="goal-row scenario">${obj.items.map(g => `
           <div class="goal ${g.done ? 'done' : ''} ${g.optional ? 'optional' : ''}"><i>${g.done ? '✓' : '○'}</i>${esc(g.label)}${g.optional ? '<u>捷</u>' : ''}</div>`).join('')}</div>`
           : `<div class="goal-row">
-          <div class="goal ${obj.kaifeng ? 'done' : ''}"><i>${obj.kaifeng ? '✓' : '○'}</i>东京开封</div>
+          <div class="goal ${obj.kaifeng ? 'done' : ''}"><i>${obj.kaifeng ? '✓' : '○'}</i>旧都开封</div>
           <div class="goal ${obj.yanjing ? 'done' : ''}"><i>${obj.yanjing ? '✓' : '○'}</i>燕京</div>
         </div>`}
         ${bar('版籍', songN / (songN + jinN) * 100, '#b5483a')}
-        <div class="mini-row"><span>宋 ${songN} 州 · ${s.totalTroops} 营</span><span>金 ${jinN} 州 · ${s.jinTroops} 营</span></div>
+        <div class="mini-row"><span>行台 ${songN} 州 · ${s.totalTroops} 营</span><span>北廷 ${jinN} 州 · ${s.jinTroops} 营</span></div>
         <div class="game-note">${s.scenario ? `${esc(s.scenario.era)} · ${esc(s.scenario.tag)} · 固定开局` : esc(s.diffDef.name)} · 局号 #${s.seed}${s.variant?.notes?.length ? '<br>' + esc(s.variant.notes.join('，')) : ''}</div>
       </section>
 
@@ -722,7 +722,7 @@ export function createUI(root, state, opts = {}) {
         ${bar('主和', s.court.he, '#3d4b60')}
         <p class="card-note">朝论所向，决于政令多寡与军心。主和过盛，北伐之议将寝。</p>
         ${s.truce ? `<div class="flag-note">和议未废 · 尚余 ${s.truce} 回合</div>` : ''}
-        ${s.charge ? `<div class="flag-note hot">御驾亲征 · 本回合攻势 +25%</div>` : ''}
+        ${s.charge ? `<div class="flag-note hot">执政亲临 · 本回合攻势 +25%</div>` : ''}
       </section>
 
       <section class="card heroes">
@@ -788,7 +788,7 @@ export function createUI(root, state, opts = {}) {
       <section class="card city-card">
         <div class="card-eyebrow">州郡舆情</div>
         ${c ? `
-          <div class="city-head"><h2>${esc(c.name)}</h2><span class="owner ${c.owner}">${c.owner === 'song' ? '宋' : '金'}</span></div>
+          <div class="city-head"><h2>${esc(c.name)}</h2><span class="owner ${c.owner}">${c.owner === 'song' ? '台' : '北'}</span></div>
           <div class="city-tags">
             <span>${TERRAIN_LABEL[c.terrain]}</span>
             <span>守险 +${Math.round(({ plain: 0, mountain: 0.35, river: 0.2, coast: 0.1 }[c.terrain]) * 100)}%</span>
@@ -801,14 +801,14 @@ export function createUI(root, state, opts = {}) {
           <div class="city-stats">
             <div><span>驻军</span><b>${c.troops} 营</b></div>
             <div><span>岁赋</span><b>${c.yieldGrain} 粮</b></div>
-            <div><span>粮道</span><b class="txt ${c.owner === 'song' && !linked ? 'warn' : ''}">${c.owner === 'song' ? (linked ? '通行在' : '断绝') : '金据'}</b></div>
+            <div><span>粮道</span><b class="txt ${c.owner === 'song' && !linked ? 'warn' : ''}">${c.owner === 'song' ? (linked ? '通行在' : '断绝') : '北据'}</b></div>
             <div><span>连营</span><b class="txt">${sup.support[c.id] || 0} 处</b></div>
           </div>
           ${c.owner === 'song' ? `
             ${s.hero ? stationBtn('main', s.hero, s.heroCity, c.id) : ''}
             ${s.viceHero ? stationBtn('vice', s.viceHero, s.viceHeroCity, c.id) : ''}
           ` : ''}
-          <div class="link-label">官道所通 <span class="link-legend">· 蓝字为津渡，金城后标胜算</span></div>
+          <div class="link-label">官道所通 <span class="link-legend">· 蓝字为津渡，北城后标胜算</span></div>
           <div class="link-list">${c.links.map(id => {
             const n = s.cities[id];
             const p = c.owner === 'song' && n.owner === 'jin' ? previewBattle(s, c.id, id) : null;
@@ -828,8 +828,8 @@ export function createUI(root, state, opts = {}) {
           <span>州郡索引</span>
           <select id="cityJump" aria-label="州郡索引">
             <option value="">择州郡…</option>
-            <optgroup label="宋 · 行在版籍">${s.songCities.map(c2 => `<option value="${c2.id}">${esc(c2.name)} · ${c2.troops} 营</option>`).join('')}</optgroup>
-            <optgroup label="金 · 伪据州郡">${s.jinCities.map(c2 => `<option value="${c2.id}">${esc(c2.name)} · ${c2.troops} 营</option>`).join('')}</optgroup>
+            <optgroup label="行台 · 行在版籍">${s.songCities.map(c2 => `<option value="${c2.id}">${esc(c2.name)} · ${c2.troops} 营</option>`).join('')}</optgroup>
+            <optgroup label="北廷 · 所占州郡">${s.jinCities.map(c2 => `<option value="${c2.id}">${esc(c2.name)} · ${c2.troops} 营</option>`).join('')}</optgroup>
           </select>
         </div>
       </section>
@@ -845,7 +845,7 @@ export function createUI(root, state, opts = {}) {
           ${btn('march', '进军', c && c.owner === 'song' ? '点选相邻州郡' : '先择己方州郡', can.march)}
           ${btn('chouliang', '筹粮', '+40 粮 · 民心 -4', can.chouliang)}
           ${btn('anfu', '安抚', '15 粮 · 民心 +9', can.anfu)}
-          ${btn('qinzheng', '御驾亲征', `2 政令 · 攻势 +25% · 余 ${Math.max(0, MAX_CHARGE - (s.chargeUsed || 0))} 次`, can.qinzheng)}
+          ${btn('qinzheng', '执政亲临', `2 政令 · 攻势 +25% · 余 ${Math.max(0, MAX_CHARGE - (s.chargeUsed || 0))} 次`, can.qinzheng)}
           ${btn('heyi', '遣使和议', '55 钱 · 缓兵两回合', can.heyi)}
         </div>
       </section>
@@ -920,7 +920,7 @@ export function createUI(root, state, opts = {}) {
           return;
         }
         if (auto.game >= MAX_AUTO_GAMES) {
-          setAutoDecision(`已推演 ${MAX_AUTO_GAMES} 局仍未竟全功，请官家亲自临朝。`);
+          setAutoDecision(`已推演 ${MAX_AUTO_GAMES} 局仍未竟全功，请执政亲自临朝。`);
           updateAutoHud();
           stopAuto(true);
           return;
@@ -1023,7 +1023,7 @@ export function createUI(root, state, opts = {}) {
   }
 
   function toggleAuto() {
-    if (auto.running) { stopAuto(); toast('托管已停止，官家可亲自临朝。'); }
+    if (auto.running) { stopAuto(); toast('托管已停止，执政可亲自临朝。'); }
     else startAuto();
   }
 
@@ -1142,7 +1142,7 @@ export function createUI(root, state, opts = {}) {
       sfx('click');
       return;
     }
-    if (act === 'auto-stop') { stopAuto(); toast('托管已停止，官家可亲自临朝。'); sfx('click'); return; }
+    if (act === 'auto-stop') { stopAuto(); toast('托管已停止，执政可亲自临朝。'); sfx('click'); return; }
     if (act === 'auto-restart') { stopAuto(); startAuto(); return; }
 
     const passive = ['help', 'close-help', 'mute', 'reset-cam', 'toggle-log',
@@ -1373,7 +1373,7 @@ export function createUI(root, state, opts = {}) {
       auto.ctx = null;
       auto.decision = '';
       el.autoHud.hidden = true;
-      toast('新局已开，愿官家此回直取旧都。');
+      toast('新局已开，愿执政此回直取旧都。');
     }
   }
 
@@ -1435,7 +1435,7 @@ export function createUI(root, state, opts = {}) {
         <h2>${esc(ev.title)}</h2>
         <div class="event-rule"></div>
         <p class="event-text">${esc(ev.text)}</p>
-        <div class="event-label">请官家裁断</div>
+        <div class="event-label">请执政裁断</div>
         <div class="event-options">
           ${ev.options.map((o, i) => `
             <button class="event-opt" data-act="event-opt" data-i="${i}">

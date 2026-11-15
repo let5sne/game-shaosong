@@ -49,7 +49,7 @@ window.__shaosong = {
   renderMode: demandRender ? 'demand' : 'always', settings, derived: cfg,
 };
 
-// 设置面板改动渲染参数后重载：若原本在对局中，自动续回原局面，不把官家踢回开场页。
+// 设置面板改动渲染参数后重载：若原本在对局中，自动续回原局面，不把执政踢回开场页。
 let resumePending = false;
 try {
   resumePending = sessionStorage.getItem(RESUME_KEY) === '1';

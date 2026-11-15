@@ -1,4 +1,4 @@
-"""《绍宋》三维资产建模 —— 在 Blender 内通过 MCP 执行。
+"""《版籍》三维资产建模 —— 在 Blender 内通过 MCP 执行。
 
 坐标约定：与 three.js 一致（X 左右 / Y 向上 / Z 为前进方向），
 故导出 glTF 时设 export_yup=False，顶点原样进入 three 场景。

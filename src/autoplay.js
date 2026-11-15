@@ -92,7 +92,7 @@ export function battleOdds(s, from, to) {
 
 /**
  * 择将而任：统计当前可攻目标的地形与涉水情形，逐员估算战法收益。
- * 平原多用岳飞、水网多用韩世忠、山险多用吴玠——不再是固定一将到底。
+ * 平原多用叶锐、水网多用高楫、山险多用周岩——不再是固定一将到底。
  */
 export function bestHero(s, phase = phaseOf(s)) {
   const bias = biasFor(s, phase);
@@ -165,8 +165,8 @@ export function bestViceHero(s, mainId = s.heroId, phase = phaseOf(s)) {
       (a.terrain?.[to.terrain] || 0)
       + (riverBetween(from, to) ? -GEO.crossAtk * (a.river || 0) + (a.amphibious || 0) : 0)
     ), 0) / totalW;
-    // 局面原型：粮紧用赵鼎、主和盛用李纲、兵额满用张俊、多涉水用水师、
-    // 孤城未通用吴玠、秋冬守势用刘锜——八员各有其时，不再固定一将到底
+    // 局面原型：粮紧用朱润、主和盛用齐度、兵额满用黄衍、多涉水用水师、
+    // 孤城未通用周岩、秋冬守势用白坚——八员各有其时，不再固定一将到底
     const situational =
       (s.grain < 85 && h.id === 'zhaoding' ? 0.12 : 0)
       + (s.court.he > 55 && h.id === 'ligang' ? 0.12 : 0)
@@ -222,7 +222,7 @@ const canTrain = (s, c, ctx) => c && c.owner === 'song' && ctx.trains < TRAIN_LI
   && s.decree >= 1 && s.grain >= 18 && s.gold >= 12
   && c.lastTrainTurn !== s.turn && c.troops < troopCap(s, c);
 
-/** 春、夏金骑北还，是北伐窗口；秋、冬则须厚集边防。短剧本金人每回合叩城，无窗口可言 */
+/** 春、夏廷骑北还，是北伐窗口；秋、冬则须厚集边防。短剧本北廷每回合叩城，无窗口可言 */
 const isWindowSeason = s => !s.scenario?.jinEveryTurn && (s.turn - 1) % 4 < 2;
 
 function weakestFront(s) {
@@ -345,9 +345,9 @@ export function chooseAction(s, ctx = newTurnContext(s)) {
     return { type: 'anfu', desc: `民心浮动，减免两浙赋役以固根本` };
   }
 
-  // 五、有必胜之战而未亲征，先树黄旗：本回合攻势再 +25%
+  // 五、有必胜之战而未亲临，先树黄旗：本回合攻势再 +25%
   if ((ready || (best && best.ratio >= 0.95)) && s.canQinzheng && s.decree >= 3) {
-    return { type: 'qinzheng', desc: `御驾亲征，本回合诸军攻势 +25%` };
+    return { type: 'qinzheng', desc: `执政亲临，本回合诸军攻势 +25%` };
   }
 
   // 六、攻城
@@ -375,11 +375,11 @@ export function chooseAction(s, ctx = newTurnContext(s)) {
     }
   }
 
-  // 八、秋冬金骑南下，最弱的前线州郡须补兵，谨防长驱入江
+  // 八、秋冬廷骑南下，最弱的前线州郡须补兵，谨防长驱入江
   if (!isWindowSeason(s) || !best) {
     const weak = weakestFront(s);
     if (weak && weak.troops < 10 && canTrain(s, weak, ctx) && s.decree >= 2) {
-      return { type: 'zhengjun', city: weak.id, desc: `${weak.name}当金骑之冲，增兵固守` };
+      return { type: 'zhengjun', city: weak.id, desc: `${weak.name}当廷骑之冲，增兵固守` };
     }
     const rf = weak && weak.troops < 7 && s.decree >= 2 ? reinforceOption(s, weak.id) : null;
     if (rf) {

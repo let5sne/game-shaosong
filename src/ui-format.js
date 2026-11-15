@@ -44,7 +44,7 @@ export function computeAlerts(s) {
     pick: isolated[0].id,
   });
   if (['春', '夏'].includes(['春', '夏', '秋', '冬'][(s.turn - 1) % 4])) {
-    out.push({ level: 'warn', html: '秋防将至 · 金骑秋冬南牧，宜趁春夏整军北进' });
+    out.push({ level: 'warn', html: '秋防将至 · 廷骑秋冬南牧，宜趁春夏整军北进' });
   }
   if (s.maxTurns - s.turn <= 3) out.push({ level: 'bad', html: `时限将至 · 余 ${s.maxTurns - s.turn} 回合` });
   return out.slice(0, 3);

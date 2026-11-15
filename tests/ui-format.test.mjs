@@ -10,7 +10,7 @@ const items = () => SETTING_GROUPS.flatMap(g => g.items);
 
 test('esc 只转义五类 HTML 敏感字符', () => {
   assert.equal(esc('&<>"\''), '&amp;&lt;&gt;&quot;&#39;');
-  assert.equal(esc('临安府 · 建炎三年'), '临安府 · 建炎三年');
+  assert.equal(esc('临安府 · 承平三年'), '临安府 · 承平三年');
   assert.equal(esc(0), '0');
   assert.equal(esc('a & b'), 'a &amp; b', '& 必须先转义，否则二次转义会漏');
 });
@@ -151,7 +151,7 @@ test('computeAlerts：终局不再报警，且最多三条', () => {
   assert.equal(many.length, 3);
 });
 
-test('computeAlerts：金据州郡不计入孤城（只看己方版籍）', () => {
+test('computeAlerts：北据州郡不计入孤城（只看己方版籍）', () => {
   const cities = {
     linan: { id: 'linan', name: '临安', owner: 'song', seat: true, links: ['kaifeng'] },
     kaifeng: { id: 'kaifeng', name: '开封', owner: 'jin', links: ['linan'] },

@@ -67,7 +67,7 @@ export function restore(state, raw) {
   if (state.viceHeroCity && state.viceHeroCity === state.heroCity) state.viceHeroCity = null;
   if (!Number.isFinite(state.viceHeroTurn)) state.viceHeroTurn = 0;
   if (!state.flags) state.flags = new Set();
-  // v1 早期档没有可复现随机流与亲征次数：补一份确定值，续玩不至于掷出 NaN
+  // v1 早期档没有可复现随机流与亲临次数：补一份确定值，续玩不至于掷出 NaN
   if (!Number.isFinite(state.rngState)) state.rngState = (Number(state.seed) || 1) >>> 0;
   if (!Number.isFinite(state.chargeUsed)) state.chargeUsed = 0;
   state._twoCapitalsNoted = !!(state.cities.kaifeng?.owner === 'song' && state.cities.yanjing?.owner === 'song');

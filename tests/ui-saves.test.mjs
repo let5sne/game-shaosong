@@ -29,8 +29,8 @@ test('当前卷：摘要标「· 当前」，逐令自动写入的卷号与 act 
 
 test('普通卷：难度名、回合、版籍与局号齐备，并可载入', () => {
   const html = savesHtml({ act: 1, inGame: true, slots: [full(1)] });
-  assert.match(html, /建炎北伐/);
-  assert.match(html, /第 7 回合 · 宋 12／24 州 · 局号 #123456/);
+  assert.match(html, /承平本色/);
+  assert.match(html, /第 7 回合 · 行台 12／24 州 · 局号 #123456/);
   assert.match(html, /data-act="save-load" data-slot="1"/);
 });
 
@@ -39,17 +39,17 @@ test('短剧本卷：优先显示剧本名，而非难度名', () => {
     act: 1, inGame: true,
     slots: [full(1, { scenarioId: 'yancheng' })],
   });
-  assert.match(html, /郾城破阵/);
-  assert.ok(!html.includes('建炎北伐'));
+  assert.match(html, /蔡州破阵/);
+  assert.ok(!html.includes('承平本色'));
 });
 
-test('未登记的剧本 id 回退「短剧本」，未登记难度回退「建炎北伐」', () => {
+test('未登记的剧本 id 回退「短剧本」，未登记难度回退「承平本色」', () => {
   const html = savesHtml({
     act: 1, inGame: true,
     slots: [full(1, { scenarioId: 'nope' }), full(2, { difficulty: 'nope' })],
   });
   assert.match(html, /短剧本/);
-  assert.match(html, /建炎北伐/);
+  assert.match(html, /承平本色/);
 });
 
 test('终局卷：标「终局」且不可载入，但仍可删', () => {

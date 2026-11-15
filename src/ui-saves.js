@@ -21,10 +21,10 @@ export function savesHtml({ act, inGame, slots }) {
             const label = sl.broken ? '卷宗漫漶 · 已损'
               : sl.over ? '终局'
               : sl.scenarioId ? (SCENARIOS.find(x => x.id === sl.scenarioId)?.name || '短剧本')
-              : (DIFFICULTIES.find(d => d.id === sl.difficulty)?.name || '建炎北伐');
+              : (DIFFICULTIES.find(d => d.id === sl.difficulty)?.name || '承平本色');
             return `<div class="save-slot ${sl.slot === act ? 'active' : ''}">
               <div class="ss-head"><b>第 ${sl.slot} 卷${sl.slot === act ? ' · 当前' : ''}</b><time>${esc(dateOf(sl.at))}</time></div>
-              <div class="ss-info"><b>${esc(label)}</b><span>${sl.broken || sl.over ? '此卷不可载入' : `第 ${sl.turn} 回合 · 宋 ${sl.songN}／${sl.totalN} 州 · 局号 #${sl.seed ?? ''}`}</span></div>
+              <div class="ss-info"><b>${esc(label)}</b><span>${sl.broken || sl.over ? '此卷不可载入' : `第 ${sl.turn} 回合 · 行台 ${sl.songN}／${sl.totalN} 州 · 局号 #${sl.seed ?? ''}`}</span></div>
               <div class="ss-btns">
                 ${!sl.broken && !sl.over ? `<button class="btn-ghost" data-act="save-load" data-slot="${sl.slot}">载入</button>` : ''}
                 ${inGame ? `<button class="btn-ghost" data-act="save-write" data-slot="${sl.slot}">存此卷</button>` : ''}

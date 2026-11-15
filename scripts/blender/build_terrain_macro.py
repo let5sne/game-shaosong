@@ -1,4 +1,4 @@
-"""《绍宋》地表「宏尺度」质感贴图 —— 在 Blender 内执行：
+"""《版籍》地表「宏尺度」质感贴图 —— 在 Blender 内执行：
     blender -b --factory-startup -P scripts/blender/build_terrain_macro.py
 
 与 build_terrain.py 的分工：

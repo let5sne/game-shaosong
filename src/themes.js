@@ -19,18 +19,18 @@ export const DEFAULT_CAMERA_POSE = Object.freeze({
 export const SCENE_THEMES = Object.freeze({
   campaign: {
     id: 'campaign', name: '北伐长局', tag: '全图 · 三档国势',
-    era: '建炎 · 春', season: '春', accent: '#b9924c',
+    era: '承平 · 春', season: '春', accent: '#b9924c',
     poem: '江左一隅，北望中原',
-    brief: '行在初定，诸军未集。整军、筹粮、平朝议，在金人再度南下之前，把版籍一寸一寸收回来。',
+    brief: '行台初立，诸军未集。整军、筹粮、平朝议，在北廷再度南下之前，把版籍一寸一寸收回来。',
     pose: DEFAULT_CAMERA_POSE,
     marks: [],
     light: null,
   },
   shunchang: {
-    id: 'shunchang', name: '顺昌婴城', tag: '守 · 九回合',
-    era: '绍兴十年 · 夏', season: '夏', accent: '#5f8a72',
-    poem: '凿舟沉之，示无去意',
-    brief: '金人毁盟南下，刘锜以八字军赴东京留守，行至顺昌而敌骑已薄城下。婴城拒骑，撑过九轮猛攻。',
+    id: 'shunchang', name: '寿春婴城', tag: '守 · 九回合',
+    era: '景宁元年 · 夏', season: '夏', accent: '#5f8a72',
+    poem: '沉舟断渡，示无去意',
+    brief: '北廷提前毁约，三路重兵压淮。白坚赴寿春，城孤粮少，凿沉漕船于渡口，敌我俱不得济。婴城拒骑，撑过九轮猛攻。',
     pose: Object.freeze({ position: [18, 46, 48], target: [8, 0, 6], fov: 42 }),
     marks: Object.freeze(['shouchun', 'chuzhou', 'haizhou']),
     // 淮上盛夏：天光偏冷青、湿雾收近、日头稍柔，衬出「孤城拒骑」的闷压感
@@ -43,10 +43,10 @@ export const SCENE_THEMES = Object.freeze({
     }),
   },
   yancheng: {
-    id: 'yancheng', name: '郾城破阵', tag: '攻 · 十二回合',
-    era: '绍兴十年 · 秋', season: '秋', accent: '#b8663c',
-    poem: '背嵬步阵，直抵朱仙',
-    brief: '岳家军进至郾城一带，金人以铁浮图、拐子马合围。平地无险可依，唯硬撼之，十二回合内断开封东南两翼。',
+    id: 'yancheng', name: '蔡州破阵', tag: '攻 · 十二回合',
+    era: '景宁元年 · 秋', season: '秋', accent: '#b8663c',
+    poem: '重锋叠阵，直取两翼',
+    brief: '叶锐前军进至蔡州，北廷以重甲居中、轻骑两翼合围。平地无险可依，唯硬撼之，十二回合内断开封东南两翼。',
     pose: Object.freeze({ position: [26, 52, 42], target: [10, 0, 0], fov: 44 }),
     marks: Object.freeze(['caizhou', 'yingtian', 'xuzhou', 'shouchun']),
     // 中原秋日：低角度暖阳拉长坡影、天色转赭，与宣纸底形成季节反差

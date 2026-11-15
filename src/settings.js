@@ -155,14 +155,14 @@ export const SETTING_GROUPS = [
         // 打开裸链接 ?seed=... 也会被悄悄塞进剧本关（历史实机回归会抓到）。
         // 面板／开场页选择后由 syncUrl 写入 ?scenario=，链接自身就是持久化。
         urlOnly: true,
-        desc: '北伐长局或短剧本（顺昌／郾城，固定开局）；链接参数可直接起该关。',
+        desc: '北伐长局或短剧本（寿春／蔡州，固定开局）；链接参数可直接起该关。',
         options: [{ v: 'campaign', label: '北伐长局' }, ...SCENARIOS.map(s => ({ v: s.id, label: s.name }))],
         decode: p => (p.has('scenario') ? (findScenario(p.get('scenario'))?.id ?? 'campaign') : undefined),
         encode: v => ({ scenario: v === 'campaign' ? null : v }),
       },
       {
         id: 'difficulty', label: '国势', type: 'select', default: 'normal', effect: 'next',
-        desc: '宽和／本色／艰险，改金军兵势、仓廪、回合上限与开局变局。',
+        desc: '宽和／本色／艰险，改北军兵势、仓廪、回合上限与开局变局。',
         options: DIFFICULTIES.map(d => ({ v: d.id, label: d.name })),
         storageKey: LEGACY_KEYS.difficulty, legacy: legacy.difficulty,
         decode: p => pick(p.get('difficulty'), DIFF_IDS),

@@ -148,7 +148,7 @@ test('攻守系数确定性，胜率边界收敛', () => {
   assert.equal(winChance(1000, 1), 1);
 });
 
-test('御驾亲征：两道政令、每局至多 MAX_CHARGE 次', () => {
+test('执政亲临：两道政令、每局至多 MAX_CHARGE 次', () => {
   const s = new GameState({ seed: 8, random: false });
   s.decree = 99;
   for (let i = 0; i < MAX_CHARGE; i++) {
@@ -181,7 +181,7 @@ test('分路都督：另置幕府耗钱加耗粮，主帅常效与本路战法�
   const gold0 = s.gold, he0 = s.court.he;
   assert.equal(s.renming('yuefei'), true);
   assert.equal(s.renming('liqi', 'vice'), true);
-  assert.equal(s.viceHero.name, '刘锜');
+  assert.equal(s.viceHero.name, '白坚');
   assert.equal(s.gold, gold0 - VICE_COST_GOLD);
   assert.ok(s.court.he >= he0 + VICE_COURT_HE);   // 诸将不相统属，主和渐长
   assert.equal(s.renming('yuefei', 'vice'), false);  // 一人不兼两路
@@ -191,7 +191,7 @@ test('分路都督：另置幕府耗钱加耗粮，主帅常效与本路战法�
   assert.equal(s.dujun('chuzhou', 'vice'), true);
   const P = battleParams(s, s.cities.chuzhou, s.cities.xuzhou, 'song', 8);
   assert.ok(P.atkParts.some(([k]) => k.includes('分路')), '分帅本城应有分路战法／督军加成');
-  assert.ok(P.atkParts.some(([k]) => k.startsWith('步阵')), '主帅常效不应被分镇削弱');
+  assert.ok(P.atkParts.some(([k]) => k.startsWith('叠阵')), '主帅常效不应被分镇削弱');
   const Q = battleParams(s, s.cities.jiankang, s.cities.luzhou, 'song', 8);
   assert.ok(!Q.atkParts.some(([k]) => k.includes('分路')), '他城不应吃到分帅战法');
 
@@ -288,7 +288,7 @@ test('文臣任分路：庙算补半道政令、漕运补半额漕粮', () => {
   const c = new GameState({ seed: 22, random: false });
   c.decree = 99; c.renming('yuefei'); c.viceHeroId = 'zhaoding';
   c.chouliang();
-  assert.equal(c.grain - grain0 - plain, 3);   // 赵鼎 grainBonus 6 的半额
+  assert.equal(c.grain - grain0 - plain, 3);   // 朱润 grainBonus 6 的半额
 });
 
 test('悔棋快照：逐令入栈后逆序恢复，局面、旗标与随机流均回到下令前', () => {
@@ -344,8 +344,8 @@ test('短剧本固定开局：异局号起点相同，同局号整关仍可复�
   const b = new GameState({ seed: 202, scenario: 'shunchang' });
   assert.equal(opening(a), opening(b), '剧本不抽随机变局，任何局号起点一致');
   assert.equal(a.variant.notes.length, 0);
-  assert.equal(a.scenario.name, '顺昌婴城');
-  assert.equal(a.hero.name, '刘锜');
+  assert.equal(a.scenario.name, '寿春婴城');
+  assert.equal(a.hero.name, '白坚');
   assert.equal(a.heroCity, 'shouchun');
 
   const c = new GameState({ seed: 101, scenario: 'shunchang' });
@@ -362,11 +362,11 @@ test('无效剧本 id 回退长局，长局基线不受剧本影响', () => {
   assert.equal(s.scenario, null);
   assert.equal(s.maxTurns, DIFFICULTIES[1].maxTurns);
   assert.equal(s.variant.notes.length, 2);
-  assert.match(s.objective.text, /东京开封/);
+  assert.match(s.objective.text, /旧都开封/);
   assert.equal(s.objective.items, null);
 });
 
-test('顺昌：撑过回合上限且两城不失即胜；中途失守可夺回，终局失守方败', () => {
+test('寿春：撑过回合上限且两城不失即胜；中途失守可夺回，终局失守方败', () => {
   const s = new GameState({ seed: 1, scenario: 'shunchang' });
   s.turn = s.maxTurns + 1;
   s.changed();
@@ -392,21 +392,21 @@ test('顺昌：撑过回合上限且两城不失即胜；中途失守可夺回�
   assert.equal(u.over.title, '淮上溃防');
 });
 
-test('顺昌：袭取海州即刻大捷；郾城：克复两翼即刻胜，超时则班师', () => {
+test('寿春：袭取海州即刻大捷；蔡州：克复两翼即刻胜，超时则班师', () => {
   const a = new GameState({ seed: 4, scenario: 'shunchang' });
   a.cities.haizhou.owner = 'song';
   a.changed();
-  assert.equal(a.over?.title, '顺昌大捷');
+  assert.equal(a.over?.title, '寿春大捷');
   assert.ok(a.over.turn < a.maxTurns);
 
   const b = new GameState({ seed: 5, scenario: 'yancheng' });
-  assert.equal(b.hero.name, '岳飞');
+  assert.equal(b.hero.name, '叶锐');
   assert.equal(b.cities.caizhou.owner, 'song');
   b.cities.yingtian.owner = 'song';
   b.cities.xuzhou.owner = 'song';
   b.changed();
   assert.equal(b.over?.kind, 'win');
-  assert.equal(b.over.title, '郾城破阵');
+  assert.equal(b.over.title, '蔡州破阵');
 
   const c = new GameState({ seed: 6, scenario: 'yancheng' });
   c.turn = c.maxTurns + 1;
@@ -444,7 +444,7 @@ test('剧本存档往返：scenarioId 保留，续玩与不中断的一局完全
   const b = new GameState({ seed: 1 });
   assert.ok(restore(b, raw));
   assert.equal(b.scenarioId, 'yancheng');
-  assert.equal(b.scenario.name, '郾城破阵');
+  assert.equal(b.scenario.name, '蔡州破阵');
   assert.equal(b.maxTurns, a.maxTurns);
   step(a, 30); step(b, 30);
   assert.equal(snapshot(a), snapshot(b));
@@ -463,7 +463,7 @@ test('剧本目标声明自洽：marks 覆盖必守与必取，军令文案与�
     }
     assert.equal(s.objective.items.length, p.items.length);
     assert.equal(s.objective.scenario.id, sc.id);
-    assert.ok(s.scenario.jinEveryTurn, '短关金人每回合叩边');
+    assert.ok(s.scenario.jinEveryTurn, '短关北军每回合叩边');
     assert.match(scenarioGoalText(sc), /回合为限/);
   }
 });

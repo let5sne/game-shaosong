@@ -30,7 +30,7 @@ export const BUILDINGS = Object.freeze([
     effect: lv => `戍耗 -${(lv * 0.25).toFixed(2)} · 备荒 ${lv} 次`,
   },
   {
-    id: 'zuofang', name: '军器作坊', glyph: '械', desc: '铸神臂弓、铁札甲。每级每回合产出 2 军械；军械可加攻势，整军时亦可耗用。',
+    id: 'zuofang', name: '军器作坊', glyph: '械', desc: '铸弓机、铁甲。每级每回合产出 2 军械；军械可加攻势，整军时亦可耗用。',
     effect: lv => `军械 +${lv * 2}/回合`,
   },
   {
@@ -59,24 +59,24 @@ export const DISPATCH_IDS = DISPATCH_TASKS.map(t => t.id);
 /**
  * 里程碑战法：每人两级，Lv3 / Lv5 解锁。
  * 效果只对「在任」（主帅／分帅）的将领生效，故「先培养谁、再拜谁」本身成为策略。
- * 秦桧的两条刻意带负面守势——养成不等于一律变强，人物设定仍要作数。
+ * 邓缓的两条刻意带负面守势——养成不等于一律变强，人物设定仍要作数。
  */
 export const HERO_MILESTONES = Object.freeze({
   yuefei: [
-    { at: 3, name: '连结河朔', desc: '河朔义军相附，全军攻势 +3%', atk: 0.03 },
-    { at: 5, name: '背嵬亲军', desc: '亲军成阵，攻势 +5%、守势 +2%', atk: 0.05, defend: 0.02 },
+    { at: 3, name: '沿边义从', desc: '沿边义从相附，全军攻势 +3%', atk: 0.03 },
+    { at: 5, name: '重锋亲军', desc: '亲军成阵，攻势 +5%、守势 +2%', atk: 0.05, defend: 0.02 },
   ],
   hanshizhong: [
-    { at: 3, name: '黄天荡习流', desc: '舟师熟水，攻势 +3%、守势 +2%', atk: 0.03, defend: 0.02 },
+    { at: 3, name: '津渡习流', desc: '舟师熟水，攻势 +3%、守势 +2%', atk: 0.03, defend: 0.02 },
     { at: 5, name: '淮上舟师', desc: '江淮水网皆为我用，攻势 +4%、守势 +4%', atk: 0.04, defend: 0.04 },
   ],
   liqi: [
     { at: 3, name: '婴城挫敌', desc: '善以少击众，全军守势 +6%', defend: 0.06 },
-    { at: 5, name: '顺昌壁垒', desc: '壁垒既固，守势 +8%、攻势 +1%', defend: 0.08, atk: 0.01 },
+    { at: 5, name: '寿春壁垒', desc: '壁垒既固，守势 +8%、攻势 +1%', defend: 0.08, atk: 0.01 },
   ],
   wujie: [
     { at: 3, name: '关陕据险', desc: '据险自持，全军守势 +5%', defend: 0.05 },
-    { at: 5, name: '和尚原之守', desc: '险要尽在掌中，守势 +7%、攻势 +2%', defend: 0.07, atk: 0.02 },
+    { at: 5, name: '山险之守', desc: '险要尽在掌中，守势 +7%、攻势 +2%', defend: 0.07, atk: 0.02 },
   ],
   zhangjun: [
     { at: 3, name: '行营广募', desc: '诸军辐辏，各城兵额 +10%', cap: 0.10 },
@@ -91,8 +91,8 @@ export const HERO_MILESTONES = Object.freeze({
     { at: 5, name: '丰财和众', desc: '粮赋 +10%、筹粮另得 4 粮', income: 0.10, grainBonus: 4 },
   ],
   qinhui: [
-    { at: 3, name: '南自南、北自北', desc: '省兵息民，府库 +4 钱/回合', goldBonus: 4 },
-    { at: 5, name: '绍兴和议', desc: '府库 +6 钱/回合，然军备废弛、守势 -2%', goldBonus: 6, defend: -0.02 },
+    { at: 3, name: '省兵息民', desc: '省兵息民，府库 +4 钱/回合', goldBonus: 4 },
+    { at: 5, name: '停边之约', desc: '府库 +6 钱/回合，然军备废弛、守势 -2%', goldBonus: 6, defend: -0.02 },
   ],
 });
 

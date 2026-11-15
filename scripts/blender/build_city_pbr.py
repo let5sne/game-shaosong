@@ -1,4 +1,4 @@
-"""《绍宋》城池 PBR 套件 —— 在 Blender 内执行：
+"""《版籍》城池 PBR 套件 —— 在 Blender 内执行：
     blender -b --factory-startup -P scripts/blender/build_city_pbr.py
 
 沿用 city-surface.png 的图集分带（上半瓦作 / 下半夯土，中间 8% 隔离带），

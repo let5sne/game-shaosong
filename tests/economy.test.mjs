@@ -105,7 +105,7 @@ test('阅历等级按门槛递进并有上限，进度条在满级封顶', () =>
   assert.equal(max.unlocked.length, 2);
 });
 
-test('heroBonus 只在达到里程碑时挂专属战法，秦桧带负面守势', () => {
+test('heroBonus 只在达到里程碑时挂专属战法，邓缓带负面守势', () => {
   const ec = createEconomy();
   const before = heroBonus(ec, 'yuefei');
   assert.equal(before.atk, 0);
@@ -261,7 +261,7 @@ test('营建扣政令钱粮、逐级涨价，满级与非己方州郡皆拒', ()
   assert.equal(buildingLevels(s.economy, 'linan').tuntian, MAX_BUILDING_LEVEL);
   const spent = s.decree;
   assert.equal(s.yingjian('linan', 'bogus'), false);
-  assert.equal(s.yingjian('kaifeng', 'tuntian'), false, '金人州郡不能营建');
+  assert.equal(s.yingjian('kaifeng', 'tuntian'), false, '北廷州郡不能营建');
   assert.equal(s.yingjian('nowhere', 'tuntian'), false);
   assert.equal(s.decree, spent, '被拒的指令不许扣政令');
 });
@@ -303,7 +303,7 @@ test('grantExp 是升级播报的唯一入口，跨度升级一次补齐两条�
   s.grantExp('yuefei', LEVEL_XP[4]);
   const note = notes();
   assert.equal(note.length - before, 1, '一次授历练只播报一次');
-  assert.ok(note[0].text.includes('连结河朔') && note[0].text.includes('背嵬亲军'));
+  assert.ok(note[0].text.includes('沿边义从') && note[0].text.includes('重锋亲军'));
   assert.equal(heroProgress(s.economy, 'yuefei').level, 5);
   const n = s.logs.length;
   s.grantExp('yuefei', 1);
