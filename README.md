@@ -44,6 +44,7 @@ npm run preview    # 预览构建产物
 | `scenario` | `campaign` / `shunchang` / `yancheng` | `campaign` |
 | `difficulty` | `easy` / `normal` / `hard` | `normal` |
 | `seed` | 固定局号，可复现整局战报 | 随机 |
+| `lang` | `zh` / `en` 界面语言 | `zh` |
 | `auto` | `1` 打开即托管推演 | 关 |
 | `economy` | `1` 开启治略经营养成 | 关 |
 | `terrain` | `classic` / `paper` / `real` 地貌精度 | `paper` |
@@ -54,7 +55,23 @@ npm run preview    # 预览构建产物
 | `motion` / `mute` / `grade` | 动效 / 静音 / 开场页电影感 | `auto` / 关 / 开 |
 | `render=demand` | 省电渲染：只在状态／相机／特效变化时出帧（实验性调试参数） | 连续渲染 |
 
-完整清单见 `src/settings.js`（唯一配置真源，17 项）。优先级 **URL > 浏览器本地存储 > 默认值**；设置面板的改动会同步写回地址栏，链接可直接分享复现。`render` 是唯一的例外：它是给真机功耗对比用的调试开关，不是用户偏好，因此不进配置表、不出现在设置面板、也不落盘；`encodeSearch()` 会保留无关参数，改设置不会把这个参数冲掉。运行时也可在控制台用 `world.perf.setMode('demand')` 切换，用 `world.perf.stats()` 看帧时与 draw call。
+完整清单见 `src/settings.js`（唯一配置真源，18 项）。优先级 **URL > 浏览器本地存储 > 默认值**；设置面板的改动会同步写回地址栏，链接可直接分享复现。`render` 是唯一的例外：它是给真机功耗对比用的调试开关，不是用户偏好，因此不进配置表、不出现在设置面板、也不落盘；`encodeSearch()` 会保留无关参数，改设置不会把这个参数冲掉。运行时也可在控制台用 `world.perf.setMode('demand')` 切换，用 `world.perf.stats()` 看帧时与 draw call。
+
+
+## 界面语言与英文化
+
+`?lang=en` 打开英文版；设置面板「界面语言」切换后重载页面。中文是默认值，`encodeSearch()` 不会把 `lang=zh` 写进分享链接，因此旧链接、存档与固定局号的行为逐字不变。
+
+英文化采用**渲染边界覆盖层**，不是把中文从源码里抽走：
+
+- `data.js` / `rules.js` / `settings.js` 仍以中文为唯一真源；它们同时是存档内容、单测断言与平衡护栏的依据，抽出会扰动可复现基线。
+- `src/i18n.js` 的 `tx()` 只在 DOM 写入点（`ui.js` 的 innerHTML / textContent、`main.js`、贴图文字 `models.js`）翻译；`src/locales/en.js` 是英文覆盖表，`EN_STRINGS` 整句精译优先，`EN_PHRASES` 长词优先兜底。
+- 语言不进规则层、不进随机源、不写存档；`rules.js` / `save.js` 不 import i18n。中文模式下 `tx()` 逐字原样返回，关闭态与改造前完全一致。
+- `index.html` 的 OG/Twitter 卡固定英文供海外抓取；文档标题与 `<html lang>` 由 `main.js` 按语言切换，印章改用中英通用的字母 R。
+
+`npm run i18n:audit` 静态抽出所有玩家可见中文串、模拟英文渲染，按残留汉字数给出覆盖率与待补词条清单（`--json` 输出完整清单；译文补全后可用 `--strict` 接入 CI）。当前静态覆盖约 98%；开场页整页模板、首局引导与实机可见文本已做到**零中文残留**（`npm run verify:browser:en` 实测 0 字）。门面文案与专有名词为人工精译；剩余主要在动态战报与长段说明，由词典直译，仍待人工润色。
+
+隐私与第三方许可说明见 [privacy.html](./public/privacy.html)（中英双语、纯静态、无外部请求）。
 
 ## 代码结构
 
@@ -66,6 +83,8 @@ npm run preview    # 预览构建产物
 | `src/autoplay.js` | 托管推演 |
 | `src/save.js` | 存档与多槽管理 |
 | `src/settings.js` | 唯一配置真源：URL / 存储参数集中一张表 |
+| `src/i18n.js` / `src/locales/en.js` | 渲染边界翻译层与英文覆盖表（中文模式零开销） |
+| `public/privacy.html` | 中英双语隐私说明与第三方许可清单 |
 | `src/ui.js` | DOM 界面与交互（HUD、状态→DOM 唯一出口、托管循环） |
 | `src/ui-template.js` | HUD 模板、玩法略要、首局引导文案（纯字符串） |
 | `src/ui-format.js` | 纯展示计算：转义、百分比、条块、预警派生（无 DOM） |
@@ -77,6 +96,7 @@ npm run preview    # 预览构建产物
 | `src/ink.js` | 可选的水墨后处理 |
 | `src/economy.js` | 治略玩法（纯数据与纯函数） |
 | `scripts/verify/` | 构建产物体检与无头浏览器实机 smoke（可入库、无凭据） |
+| `scripts/i18n-audit.mjs` | 英文覆盖率审计与待补词条清单 |
 | `eslint.config.js` | ESLint 扁平配置：只守未定义／未使用／重复声明／不可达 |
 
 两条约定值得留意：攻守系数只有一个出口 `battleParams()`，实战／推演／托管共用；所有掷点走 `GameState.rngState`（mulberry32），故 `?seed=123456` 可复现整局，批量模拟可逐局比对。
@@ -88,6 +108,7 @@ npm run preview    # 预览构建产物
 ```bash
 npm test                  # node:test 单元测试
 npm run lint              # ESLint：未定义/未使用变量、重复声明、不可达代码
+npm run i18n:audit       # 英文覆盖率与待补词条清单（--json / --strict）
 npm run balance           # 300 局 × 三档难度 + 两剧本，数值护栏回归
 npm run balance:economy   # 治略模式的独立护栏
 npm run build             # 构建
@@ -95,6 +116,7 @@ npm run verify:dist       # 产物完整性、子路径相对路径、运行时�
 npm run verify:browser    # 无头 Chrome + CDP 实机 smoke（需 Node 22+ 与本机 Chrome）
 npm run verify:browser -- --render=demand   # 同上，回归省电渲染模式
 npm run verify:browser:mobile              # 同上，390×844@3x 窄屏：自动降档与抽屉布局
+npm run verify:browser:en                  # 英文版实机 smoke：文档语言、标题、门面与中文残留计数
 ```
 
 `vite.config.js` 把 `chunkSizeWarningLimit` 设为 600 KB：three 核心约 530 KB 是第三方固有体积，已单独成块并异步加载，不压首屏关键路径。`verify:dist` 会按 index ≤ 200 KB / world ≤ 100 KB / three ≤ 600 KB / css ≤ 80 KB 的预算逐项复核，超预算直接失败。上述检查已全部接入 CI（`.github/workflows/deploy.yml`）；本机若没有 Chrome，`verify:browser` 会打印 `SKIP` 并以 0 退出，不制造假红灯。
@@ -116,6 +138,6 @@ npm run verify:browser:mobile              # 同上，390×844@3x 窄屏：自�
 
 本仓库以 **MIT 许可证**开源，见 [LICENSE](./LICENSE)：允许复制、修改与再发布（含商业用途），须保留版权与许可声明。字体子集遵循 `public/fonts/OFL.txt`（SIL OFL 1.1），`three` 与 `vite` 遵循各自许可证。若后续发行策略要求更严格的条款，应另行替换许可证。
 
-零后端、无账号、无埋点：存档仅存于本机浏览器，不上传。线上 Pages 只部署 `main`；`chixie` 为独立实验分支，含自有的一套叙事实验内容，其题材与去留需单独定性，不在本次确权范围内。
+零后端、无账号、无埋点：存档仅存于本机浏览器，不上传；详见中英双语的 [privacy.html](./public/privacy.html)。线上 Pages 只部署 `main`；`chixie` 为独立实验分支，含自有的一套叙事实验内容，其题材与去留需单独定性，不在本次确权范围内。
 
 仓库名、Pages 地址、构建产物名、npm 包名与字体文件名仍沿用 `shaosong` 系列命名，属历史遗留的技术标识，与故事内容无关；若正式对外发行，需一并更名并复核 CI 与资源路径。

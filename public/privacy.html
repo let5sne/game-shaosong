@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en" data-lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Privacy &amp; Licenses · The Register</title>
+  <style>
+    :root { --paper: #f2ead8; --ink: #2f2a24; --muted: #6b6155; --seal: #a8392f; --rule: #cfc3aa; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--paper); color: var(--ink);
+      font: 16px/1.85 Georgia, "Noto Serif SC", "Songti SC", serif; }
+    main { max-width: 720px; margin: 0 auto; padding: 56px 24px 80px; }
+    h1 { font-size: 30px; font-weight: 400; letter-spacing: .06em; margin: 0 0 4px; }
+    .sub { color: var(--muted); font-size: 14px; letter-spacing: .12em; text-transform: uppercase; }
+    .seal { display: inline-block; background: var(--seal); color: #f7eed9; padding: 6px 10px;
+      border-radius: 3px; font: 20px Georgia, serif; margin-bottom: 22px; }
+    h2 { font-size: 19px; font-weight: 400; margin: 34px 0 8px; padding-bottom: 6px;
+      border-bottom: 1px solid var(--rule); }
+    p, li { color: #413a31; }
+    ul { padding-left: 20px; }
+    code { background: #e7dcc4; padding: 1px 5px; border-radius: 2px; font-size: 14px; }
+    a { color: var(--seal); }
+    footer { margin-top: 44px; padding-top: 18px; border-top: 1px solid var(--rule);
+      font-size: 14px; color: var(--muted); display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+    [data-lang="en"] [lang="zh"], [data-lang="zh"] [lang="en"] { display: none; }
+    [data-lang="zh"] { --dummy: 0; }
+    .switch { font-size: 14px; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="seal">R</div>
+
+    <section lang="en">
+      <h1>Privacy &amp; Licenses</h1>
+      <p class="sub">The Register · A Paper Campaign</p>
+
+      <h2>What this game does not do</h2>
+      <p>The Register is a single-page browser game with <strong>no backend, no account and no analytics</strong>.
+      It makes no network requests beyond loading its own static files. There are no cookies, no advertising
+      SDKs, no telemetry and no third-party trackers. Nothing you do in a session is uploaded anywhere.</p>
+
+      <h2>What stays on your device</h2>
+      <ul>
+        <li>Saved campaigns, settings and preferences live only in your browser's
+          <code>localStorage</code> (keys prefixed <code>shaosong.</code>).</li>
+        <li>URL parameters such as <code>seed</code>, <code>lang</code> and <code>scenario</code> are read
+          locally and written back to the address bar. They are part of a shareable link, not a report to a server.</li>
+        <li>Clearing site data in your browser removes all of it. There is no copy on our side to delete.</li>
+      </ul>
+      <p>If you play inside an embedded frame (for example on itch.io), browser storage policies may isolate
+      or block local saves. Exporting a replay file is the recommended way to keep a campaign in that case.</p>
+
+      <h2>Licenses</h2>
+      <ul>
+        <li>The game's code, original story, characters and copy: <strong>MIT License</strong>
+          (see <code>LICENSE</code> in the repository). Commercial reuse is permitted with attribution.</li>
+        <li><code>three</code>: MIT License. <code>vite</code>: MIT License.</li>
+        <li>Noto Serif SC font subset: <strong>SIL Open Font License 1.1</strong>
+          (<code>public/fonts/OFL.txt</code>).</li>
+      </ul>
+      <p>Place names drawn from historical geography are used purely as labels on a fictional map and are
+      not claimed as original work. The story is fictional and is not a statement about historical events.</p>
+
+      <h2>Contact</h2>
+      <p>Questions about privacy or licensing can be raised as an issue in the project repository.
+      No personal data is required to play, and none is requested.</p>
+    </section>
+
+    <section lang="zh">
+      <h1>隐私与许可</h1>
+      <p class="sub">版籍 · 行台北伐</p>
+
+      <h2>本游戏不做什么</h2>
+      <p>《版籍》是单页浏览器游戏，<strong>无后端、无账号、无统计埋点</strong>。除加载本站静态文件外不发起任何网络请求；
+      没有 cookie、广告 SDK、遥测或第三方追踪。玩家在本机的所有操作都不会上传。</p>
+
+      <h2>留在本机的数据</h2>
+      <ul>
+        <li>存档、设置与偏好只存于浏览器的 <code>localStorage</code>（键名以 <code>shaosong.</code> 开头）。</li>
+        <li><code>seed</code>、<code>lang</code>、<code>scenario</code> 等链接参数只在本机读取并写回地址栏，
+        属于可分享链接的一部分，不会发往服务器。</li>
+        <li>在浏览器中清除本站数据即可全部删除；我们没有留副本。</li>
+      </ul>
+      <p>若在嵌入式框架内游玩（例如 itch.io），浏览器的存储策略可能隔离或阻止本地存档，
+      此时建议用复盘文件导出／导入来保留局面。</p>
+
+      <h2>许可</h2>
+      <ul>
+        <li>代码、原创故事、人物与文案：<strong>MIT 许可证</strong>（见仓库 <code>LICENSE</code>），
+        保留署名后允许商用。</li>
+        <li><code>three</code> 与 <code>vite</code>：MIT 许可证。</li>
+        <li>Noto Serif SC 字体子集：<strong>SIL OFL 1.1</strong>（<code>public/fonts/OFL.txt</code>）。</li>
+      </ul>
+      <p>州郡与河流等历史地理公名仅用作架空舆图的地名，不主张原创，也不构成史实叙述；故事为虚构。</p>
+
+      <h2>联系</h2>
+      <p>隐私或许可问题可在项目仓库提交 issue。游玩不需要、也不会索取任何个人资料。</p>
+    </section>
+
+    <footer>
+      <a href="./">← <span lang="en">Back to the game</span><span lang="zh">返回游戏</span></a>
+      <span class="switch"><a href="?lang=en">English</a> · <a href="?lang=zh">中文</a></span>
+    </footer>
+  </main>
+  <script>
+    (function () {
+      var p = new URLSearchParams(location.search);
+      // 显式 ?lang= 最优先；否则按浏览器语言，缺省英文（面向海外抓取）
+      var lang = p.get('lang') === 'zh' ? 'zh' : p.get('lang') === 'en' ? 'en'
+        : ((navigator.language || '').toLowerCase().startsWith('zh') ? 'zh' : 'en');
+      document.documentElement.setAttribute('data-lang', lang);
+      document.documentElement.setAttribute('lang', lang === 'zh' ? 'zh-CN' : 'en');
+    })();
+  </script>
+</body>
+</html>

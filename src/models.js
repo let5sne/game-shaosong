@@ -6,6 +6,7 @@
  * 屋顶采用参数化「举折 + 角翘」曲面，模拟中式庑殿／歇山顶。
  */
 import * as THREE from 'three';
+import { tx } from './i18n.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 export const SONG_COLOR = 0xb5483a;
@@ -467,10 +468,10 @@ export function makeFlagTexture(song) {
   ctx.fillStyle = song ? '#f7e9c8' : '#e9e6d4';
   ctx.font = 'bold 132px "Songti SC","STSong","SimSun",serif';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(song ? '台' : '北', 176, 118);
+  ctx.fillText(tx(song ? '台' : '北'), 176, 118);
   ctx.font = '30px "Songti SC","STSong","SimSun",serif';
   ctx.fillStyle = gold;
-  ctx.fillText(song ? '承平' : '北廷', 300, 118);
+  ctx.fillText(tx(song ? '承平' : '北廷'), 300, 118);
   // 右侧牙边（三角缺口）
   ctx.globalCompositeOperation = 'destination-out';
   for (let y = 10; y < 240; y += 30) {
@@ -534,16 +535,16 @@ export function drawLabel(cv, city, selected) {
   ctx.textBaseline = 'middle'; ctx.textAlign = 'start';
   ctx.fillStyle = '#2c2a24';
   ctx.font = 'bold 100px "Songti SC","STSong","SimSun",serif';
-  ctx.fillText(city.name, 54, 92, 560);
+  ctx.fillText(tx(city.name), 54, 92, 560);
   ctx.font = '52px "Songti SC","STSong","SimSun",serif';
   ctx.fillStyle = '#6a6355';
-  ctx.fillText(`${song ? '台' : '北'} · ${city.troops} 营`, 58, 180);
+  ctx.fillText(tx(`${song ? '台' : '北'} · ${city.troops} 营`), 58, 180);
   ctx.fillStyle = accent;
   roundRect(ctx, 646, 148, 86, 70, 10); ctx.fill();
   ctx.fillStyle = '#faf4e4';
   ctx.font = 'bold 50px "Songti SC","STSong","SimSun",serif';
   ctx.textAlign = 'center';
-  ctx.fillText(song ? '台' : '北', 689, 185);
+  ctx.fillText(tx(song ? '台' : '北'), 689, 185);
   ctx.textAlign = 'start';
 }
 

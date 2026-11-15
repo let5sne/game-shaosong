@@ -8,6 +8,7 @@
  *
  * 覆盖：DOM 就绪 / 三维挂载 / WebGL / glError / 打包 chunk / GLB 与贴图 / 控制台错误。
  *   --mobile 额外覆盖窄屏路径：390×844@3x + 触摸模拟、autoQuality 自动降档、760px 布局生效、无横向溢出。
+ *   --lang=en 打开英文版专项：文档语言、标题、门面文案与界面中文残留计数。
  * 不含像素 A/B、draw call 断言与任何部署地址；那部分仍留在本机私有脚本里。
  */
 import { spawn } from 'node:child_process';
@@ -23,10 +24,11 @@ const ARG = process.argv.slice(2).find(a => !a.startsWith('--'));
 const EXTERNAL_URL = ARG || null;
 const MOBILE = FLAGS.includes('--mobile');       // 窄屏：验证自动降档与抽屉布局
 const DEMAND = FLAGS.includes('--render=demand'); // 省电渲染
+const LANG_EN = FLAGS.includes('--lang=en');     // 英文版专项
 // 移动用例刻意**不锁** quality：main.js 的 autoQuality 会因窄屏判 low，
 // 这条用例要验的正是「窄屏 → 自动降档 → 简化资产」这条真实路径，锁 high 就绕过了它。
 const BASE = 'http://127.0.0.1:4173/?seed=123456';
-const URL = EXTERNAL_URL || `${BASE}${MOBILE ? '' : '&quality=high'}${DEMAND ? '&render=demand' : ''}`;
+const URL = EXTERNAL_URL || `${BASE}${MOBILE ? '' : '&quality=high'}${DEMAND ? '&render=demand' : ''}${LANG_EN ? '&lang=en' : ''}`;
 const PORT = 9224;
 const CDP = `http://127.0.0.1:${PORT}`;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -205,6 +207,27 @@ try {
   check(count(/\.glb($|\?)/) >= wantGlb, `${probe.quality} 档 GLB ≥ ${wantGlb}`, String(count(/\.glb($|\?)/)));
   check(count(/\.png($|\?)/) >= wantPng, `${probe.quality} 档贴图 ≥ ${wantPng}`, String(count(/\.png($|\?)/)));
   check(count(/shaosong-serif-400\.woff2/) > 0, '400 字重已加载');
+
+  // 英文版专项：只断言语言切换与门面已生效；中文残留数作为覆盖率信息输出，
+  // 不设硬阈值（译文仍在迭代，硬阈值会让 CI 因文案而非功能变红）。
+  if (LANG_EN || URL.includes('lang=en')) {
+    const e = await evaluate(s, `(() => {
+      const ui = document.getElementById('ui');
+      const text = ui ? ui.innerText : '';
+      return {
+        lang: document.documentElement.lang,
+        title: document.title,
+        zh: (text.match(/[\\u4e00-\\u9fff]/g) || []).length,
+        zhLines: text.split('\\n').filter(l => /[\\u4e00-\\u9fff]/.test(l)).slice(0, 8),
+        hasEnglish: /THE REGISTER|Take the Mandate|Regent|Northern Court|Campaign/i.test(text),
+      };
+    })()`);
+    check(e.lang === 'en', '文档语言 = en', e.lang);
+    check(e.title.includes('The Register'), '英文文档标题', e.title);
+    check(e.hasEnglish, '门面文案已英文化');
+    console.log(`info  开场页中文残留 ${e.zh} 字（详见 npm run i18n:audit）`);
+    for (const line of e.zhLines) console.log(`      ↳ ${line.trim().slice(0, 90)}`);
+  }
 
   // 窄屏专项：媒体查询、自动降档、顶栏紧凑布局、无横向溢出、触摸可用。
   if (MOBILE) {

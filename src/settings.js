@@ -149,6 +149,13 @@ export const SETTING_GROUPS = [
     note: '战局、难度与局号决定新局的起点；进行中的局面由存档接续，不受影响。',
     items: [
       {
+        id: 'lang', label: '界面语言', type: 'select', default: 'zh', effect: 'reload',
+        desc: '中文为默认；English 可用 ?lang=en 直接打开。切换后重载页面，只改屏幕文字，不动规则、存档与固定局号。',
+        options: [{ v: 'zh', label: '中文' }, { v: 'en', label: 'English' }],
+        decode: p => pick(p.get('lang'), ['zh', 'en']),
+        encode: v => ({ lang: v === 'en' ? 'en' : null }),
+      },
+      {
         id: 'scenario', label: '战局', type: 'select', default: 'campaign', effect: 'next',
         // 战局是「链接级开局指令」，不是本机偏好：开场页的择关记忆键
         // shaosong.scenario 只用于便捷预选，若当成 saved 配置读入，
@@ -351,5 +358,6 @@ export function derive(values, env = {}) {
     auto: !!values.auto,
     muted: !!values.mute,
     difficulty: values.difficulty,
+    lang: values.lang === 'en' ? 'en' : 'zh',
   };
 }

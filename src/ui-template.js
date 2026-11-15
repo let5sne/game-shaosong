@@ -126,7 +126,7 @@ export const TEMPLATE = `
         <button class="btn-ghost" data-act="auto-start">⟡ 托管推演 · 自动临朝直至胜负</button>
         <button class="intro-settings-link" data-act="settings">⚙ 舆图与开局设置</button>
       </div>
-      <div class="intro-foot">原创架空设定 · 故事与数值均为本项目自有 · 同一局号可覆核整局因果</div>
+      <div class="intro-foot">原创架空设定 · 故事与数值均为本项目自有 · 同一局号可覆核整局因果 · <a href="./privacy.html" target="_blank" rel="noopener">隐私与许可</a></div>
     </div>
   </div>
 </div>

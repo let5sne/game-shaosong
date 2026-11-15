@@ -1,4 +1,5 @@
 import './style.css';
+import { tx, setLang, getLang } from './i18n.js';
 import { GameState } from './rules.js';
 import { createUI } from './ui.js';
 import { createSettings, derive, RESUME_KEY } from './settings.js';
@@ -9,6 +10,24 @@ const uiEl = document.getElementById('ui');
 // 所有预览参数、局号、战局与偏好统一由 settings.js 解析：
 // URL 显式参数 > 已保存偏好 > 出厂默认，设置面板与链接始终一致。
 const settings = createSettings(location.search);
+setLang(settings.values.lang);
+
+/**
+ * 文档级元信息随界面语言切换。OG / Twitter 卡保持静态英文（供海外抓取，
+ * 爬虫不会执行 JS）；语言只影响屏幕文字，不进规则层、不写存档。
+ */
+function applyDocumentMeta(lang) {
+  const en = lang === 'en';
+  document.documentElement.lang = en ? 'en' : 'zh-CN';
+  document.title = en ? 'The Register · A Paper Campaign'
+    : '版籍 · 行台北伐 | The Register';
+  const desc = document.querySelector('meta[name="description"]');
+  if (desc) desc.setAttribute('content', en
+    ? 'An original turn-based strategy game. Recover the register within a three-year mandate on a paper map of twenty-four prefectures, where one seed replays the whole chain of cause and consequence.'
+    : '原创架空战略游戏：三年期限内收复版籍。以 three.js 铺开二十四州郡的宣纸舆图，同一局号可覆核整局因果。');
+}
+applyDocumentMeta(getLang());
+
 const systemReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ?? false;
 
 // 自动性能档按核心数、内存、屏幕与 DPR 判定；空间 chunk/LOD 仍需真机帧率数据再排期。
@@ -40,7 +59,7 @@ const ui = createUI(uiEl, state, {
   reducedMotion, quality, grade,   // 开场页运镜与低配／减弱动效互斥
 });
 
-sceneEl.innerHTML = '<div class="scene-loading">三 维 舆 图 展 开 中 …</div>';
+sceneEl.innerHTML = tx('<div class="scene-loading">三 维 舆 图 展 开 中 …</div>');
 
 // 调试／自动化入口：可在控制台查看局面、生效配置或启动托管推演
 window.__shaosong = {
@@ -68,8 +87,8 @@ async function mountWorld() {
     return world;
   } catch (err) {
     console.error(err);
-    sceneEl.innerHTML = `<div style="position:absolute;inset:0;display:grid;place-items:center;font:16px serif;color:#6b2d24;background:#ece3cd;text-align:center;line-height:2">
-      三维舆图未能展开<br><small>请在支持 WebGL 的浏览器中打开，或检查显卡加速是否开启。</small></div>`;
+    sceneEl.innerHTML = tx(`<div style="position:absolute;inset:0;display:grid;place-items:center;font:16px serif;color:#6b2d24;background:#ece3cd;text-align:center;line-height:2">
+      三维舆图未能展开<br><small>请在支持 WebGL 的浏览器中打开，或检查显卡加速是否开启。</small></div>`);
     return null;
   }
 }

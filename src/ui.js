@@ -1,4 +1,5 @@
 import { HEROES, HERO_USE, TERRAIN_LABEL, DIFFICULTIES, SCENARIOS, riverBetween } from './data.js';
+import { tx } from './i18n.js';
 import { SCENE_IDS, sceneTheme } from './themes.js';
 import {
   previewBattle, supplyMap, troopCap, MAX_CHARGE, VICE_COST_GOLD,
@@ -40,7 +41,7 @@ const readScenario = () => {
 const writeScenario = v => { try { localStorage.setItem(SCEN_KEY, v); } catch (_) { /* 隐私模式 */ } };
 
 export function createUI(root, state, opts = {}) {
-  root.innerHTML = TEMPLATE;
+  root.innerHTML = tx(TEMPLATE);
   // 开场页现在是半透明舞台：对局 HUD 必须整层收起，否则顶栏／三栏／战报会与舞台叠在一起。
   root.classList.add('intro-active');
   if (opts.grade === false) root.classList.add('no-grade');
@@ -123,7 +124,7 @@ export function createUI(root, state, opts = {}) {
 
   function renderSceneDetail(t) {
     const sc = SCENARIOS.find(x => x.id === t.id) || null;
-    el.sceneDetail.innerHTML = `
+    el.sceneDetail.innerHTML = tx(`
       <div class="sd-eyebrow">${esc(t.era)}　·　${t.id === 'campaign' ? '全图战局' : '场景战局'}</div>
       <div class="sd-poem">${esc(t.poem)}</div>
       <p class="sd-brief">${esc(t.brief)}</p>
@@ -131,7 +132,7 @@ export function createUI(root, state, opts = {}) {
         <div><b>军令</b><span>${esc(sc ? scenarioGoalText(sc) : '收复开封与燕京，尽逐北军')}</span></div>
         <div><b>舆图</b><span>${t.marks.length ? `${t.marks.length} 处朱批焦点 · 择关即移镜` : '全图二十四州郡'}</span></div>
       </div>
-      <div class="sd-hint">点左侧战局卡片，舆图即移到该关山川形势</div>`;
+      <div class="sd-hint">点左侧战局卡片，舆图即移到该关山川形势</div>`);
   }
 
   /**
@@ -163,7 +164,7 @@ export function createUI(root, state, opts = {}) {
     const layer = document.createElement('div');
     layer.className = 'enter-roll';
     layer.setAttribute('aria-hidden', 'true');
-    layer.innerHTML = '<i></i><i></i><b></b>';
+    layer.innerHTML = tx('<i></i><i></i><b></b>');
     root.appendChild(layer);
     const done = () => layer.remove();
     layer.addEventListener('animationend', done, { once: true });
@@ -188,19 +189,19 @@ export function createUI(root, state, opts = {}) {
     el.diffRow.hidden = !!sc;
     el.scenarioRow.hidden = !sc;
     el.scenarioBrief.hidden = !sc;
-    el.startBtn.innerHTML = sc ? '提兵赴战 <em>→</em>' : '进位临朝 <em>→</em>';
+    el.startBtn.innerHTML = tx(sc ? '提兵赴战 <em>→</em>' : '进位临朝 <em>→</em>');
 
     if (sc) {
       el.scenarioBrief.innerHTML =
-        `<p>${esc(sc.brief).replace(/\n/g, '<br>')}</p>`
+        tx(`<p>${esc(sc.brief).replace(/\n/g, '<br>')}</p>`
         + `<p class="sc-tactic"><b>用兵</b>　${esc(sc.tactic)}</p>`
-        + `<p class="sc-goal"><b>军令</b>　${esc(scenarioGoalText(sc))}</p>`;
-      el.diffDesc.textContent = `${sc.era} · ${sc.tag} · 舆图朱批圈标出必守与必取之州`;
-      el.variantNote.textContent = '固定开局，不抽随机变局；局号只定掷点，仍可复现整关。';
+        + `<p class="sc-goal"><b>军令</b>　${esc(scenarioGoalText(sc))}</p>`);
+      el.diffDesc.textContent = tx(`${sc.era} · ${sc.tag} · 舆图朱批圈标出必守与必取之州`);
+      el.variantNote.textContent = tx('固定开局，不抽随机变局；局号只定掷点，仍可复现整关。');
     } else {
       el.diffRow.querySelectorAll('.diff-btn').forEach(b => b.classList.toggle('active', b.dataset.id === chosenDifficulty));
-      el.diffDesc.textContent = D.desc;
-      el.variantNote.textContent = `每局另有两条随机变局（${D.luck === 'good' ? '偏吉' : D.luck === 'bad' ? '偏凶' : '吉凶参半'}），局号与变局均载于战报。`;
+      el.diffDesc.textContent = tx(D.desc);
+      el.variantNote.textContent = tx(`每局另有两条随机变局（${D.luck === 'good' ? '偏吉' : D.luck === 'bad' ? '偏凶' : '吉凶参半'}），局号与变局均载于战报。`);
     }
     // 续局入口指向最近更新的可续档（跨三槽）；真正载入时再把「当前卷」切过去
     const best = bestSlot();
@@ -210,7 +211,7 @@ export function createUI(root, state, opts = {}) {
       const label = info.scenarioId
         ? (SCENARIOS.find(x => x.id === info.scenarioId)?.name || '短剧本')
         : (DIFFICULTIES.find(d => d.id === info.difficulty)?.name || '承平本色');
-      el.continueBtn.textContent = `续上一局 · ${label} 第 ${info.turn} 回合 · #${info.seed || ''}`;
+      el.continueBtn.textContent = tx(`续上一局 · ${label} 第 ${info.turn} 回合 · #${info.seed || ''}`);
     }
     applySceneTheme();
   }
@@ -226,16 +227,16 @@ export function createUI(root, state, opts = {}) {
   function setMuted(v) {
     setMutedFlag(v);
     writeMute(!!v);
-    el.muteBtn.textContent = isMuted() ? '♪̸' : '♪';
+    el.muteBtn.textContent = tx(isMuted() ? '♪̸' : '♪');
     el.muteBtn.classList.toggle('off', isMuted());
   }
 
   function renderSettings() {
     const s = settings.values;
     const q = new URLSearchParams(location.search).toString();
-    el.settingsUrl.textContent = q ? `?${q}` : '（默认 · 无附加参数）';
+    el.settingsUrl.textContent = tx(q ? `?${q}` : '（默认 · 无附加参数）');
     el.settingsUrl.title = location.href;
-    el.settingsBody.innerHTML = SETTING_GROUPS.map(g => `
+    el.settingsBody.innerHTML = tx(SETTING_GROUPS.map(g => `
       <section class="set-group" data-group="${g.id}">
         <div class="set-group-head"><h3>${esc(g.title)}</h3><p>${esc(g.note)}</p></div>
         ${g.items.map(it => {
@@ -251,10 +252,10 @@ export function createUI(root, state, opts = {}) {
             </div>
           </div>`;
         }).join('')}
-      </section>`).join('');
+      </section>`).join(''));
 
     const n = pendingReload.size;
-    el.settingsFoot.innerHTML = `
+    el.settingsFoot.innerHTML = tx(`
       <div class="set-foot-status">${n
         ? `已保存 <b>${n}</b> 项须重建舆图的设定，点「应用并重载」即刻生效；对局会自动续回原局面。`
         : '所有改动已生效或已保存；关闭面板后亦可稍后刷新。'}</div>
@@ -263,7 +264,7 @@ export function createUI(root, state, opts = {}) {
         <button class="btn-ghost" data-act="set-reset">恢复默认</button>
         <button class="btn-primary ${n ? '' : 'dim'}" data-act="set-apply" id="setApplyBtn">应用并重载${n ? ` · ${n}` : ''}</button>
         <button class="btn-ghost" data-act="close-settings">关闭</button>
-      </div>`;
+      </div>`);
     el.settingsBtn.classList.toggle('on', n > 0);
   }
 
@@ -458,11 +459,11 @@ export function createUI(root, state, opts = {}) {
     const step = GUIDE_STEPS[guideStep];
     setDrawerTab(narrow() ? step.drawer : root.dataset.drawer);
     if (narrow()) logCollapsed = step.sel === '#logBox' ? false : logCollapsed;
-    guideLayer.querySelector('.guide-no').textContent = `${guideStep + 1}／${GUIDE_STEPS.length}`;
-    guideLayer.querySelector('.guide-title').textContent = step.title;
-    guideLayer.querySelector('.guide-text').innerHTML = step.text;
+    guideLayer.querySelector('.guide-no').textContent = tx(`${guideStep + 1}／${GUIDE_STEPS.length}`);
+    guideLayer.querySelector('.guide-title').textContent = tx(step.title);
+    guideLayer.querySelector('.guide-text').innerHTML = tx(step.text);
     guideLayer.querySelector('[data-guide="next"]').innerHTML =
-      guideStep === GUIDE_STEPS.length - 1 ? '领旨入局 <em>→</em>' : '下一步 <em>→</em>';
+      tx(guideStep === GUIDE_STEPS.length - 1 ? '领旨入局 <em>→</em>' : '下一步 <em>→</em>');
     requestAnimationFrame(() => { layoutGuide(); setTimeout(layoutGuide, 360); });   // 抽屉展开后复算
   }
   function endGuide(finished) {
@@ -489,7 +490,7 @@ export function createUI(root, state, opts = {}) {
     guideLayer.className = 'guide-scrim';
     guideLayer.setAttribute('role', 'dialog');
     guideLayer.setAttribute('aria-label', '首局引导');
-    guideLayer.innerHTML = `
+    guideLayer.innerHTML = tx(`
       <div class="guide-hole" aria-hidden="true"></div>
       <div class="guide-box">
         <div class="guide-eyebrow">御 前 指 南 · 第 <i class="guide-no">1／5</i> 步</div>
@@ -499,7 +500,7 @@ export function createUI(root, state, opts = {}) {
           <button class="btn-ghost" data-guide="skip">跳过引导</button>
           <button class="btn-primary" data-guide="next">下一步 <em>→</em></button>
         </div>
-      </div>`;
+      </div>`);
     root.appendChild(guideLayer);
     guideLayer.addEventListener('click', e => {
       const b = e.target.closest('[data-guide]');
@@ -521,18 +522,18 @@ export function createUI(root, state, opts = {}) {
     const on = started && !auto.running && el.intro.hidden && !state.pendingEvent;
     const list = on ? computeAlerts(state) : [];
     el.alertBar.hidden = !list.length;
-    el.alertBar.innerHTML = list.map(a => a.pick
+    el.alertBar.innerHTML = tx(list.map(a => a.pick
       ? `<button class="alert-chip ${a.level}" data-act="alert-pick" data-id="${a.pick}" title="点选该州">${a.html}<i>→</i></button>`
-      : `<span class="alert-chip ${a.level}">${a.html}</span>`).join('');
+      : `<span class="alert-chip ${a.level}">${a.html}</span>`).join(''));
   }
 
   // ── 存档 · 三卷 ───────────────────────────────────────────
   function renderSaves() {
-    el.savesBody.innerHTML = savesHtml({
+    el.savesBody.innerHTML = tx(savesHtml({
       act: activeSlot(),
       inGame: started && !state.over && !auto.running,
       slots: slotSummaries(),
-    });
+    }));
   }
   function openSaves() { renderSaves(); el.savesModal.hidden = false; sfx('click'); }
   function closeSaves() { el.savesModal.hidden = true; sfx('click'); }
@@ -578,7 +579,7 @@ export function createUI(root, state, opts = {}) {
   function toast(msg, type = 'info') {
     const d = document.createElement('div');
     d.className = `toast ${type}`;
-    d.innerHTML = msg;
+    d.innerHTML = tx(msg);
     el.toastWrap.appendChild(d);
     setTimeout(() => { d.classList.add('out'); setTimeout(() => d.remove(), 350); }, 2300);
   }
@@ -689,19 +690,19 @@ export function createUI(root, state, opts = {}) {
     const focusMemo = captureFocus();
     const s = state;
     const ecoOn = !!(s.economyOn && s.economy);
-    el.era.innerHTML = `<span class="era-main">${esc(s.yearName)}</span><span class="era-sub">${s.scenario ? `<i class="era-tag">${esc(s.scenario.name)}</i>` : ''}第 ${s.turn} / ${s.maxTurns} 回合</span>`;
+    el.era.innerHTML = tx(`<span class="era-main">${esc(s.yearName)}</span><span class="era-sub">${s.scenario ? `<i class="era-tag">${esc(s.scenario.name)}</i>` : ''}第 ${s.turn} / ${s.maxTurns} 回合</span>`);
     el.stats.innerHTML =
-      stat('粮秣', s.grain, '万石', s.grain < 40 ? 'warn' : '') +
+      tx(stat('粮秣', s.grain, '万石', s.grain < 40 ? 'warn' : '') +
       stat('缗钱', s.gold, '万贯') +
       stat('民心', s.popularity, '', s.popularity < 35 ? 'warn' : '') +
       stat('士气', s.morale, '', s.morale < 40 ? 'warn' : '') +
       (s.economyOn && s.economy ? stat('军械', s.economy.arms, '副', 'econ') : '') +
-      `<div class="stat decree"><span>政令</span><b>${s.decree}</b><small>道</small></div>`;
+      `<div class="stat decree"><span>政令</span><b>${s.decree}</b><small>道</small></div>`);
 
     const songN = s.songCities.length, jinN = s.jinCities.length;
     const obj = s.objective;
     const hero = s.hero;
-    el.left.innerHTML = `
+    el.left.innerHTML = tx(`
       <section class="card objective">
         <div class="card-eyebrow">${s.scenario ? '短剧本 · 军令' : '北伐大计'}</div>
         <h2>${esc(obj.text)}</h2>
@@ -754,7 +755,7 @@ export function createUI(root, state, opts = {}) {
         <p class="card-note">八员各有其时（悬停可看）：平原用步阵、水网用水师、守势吃紧用城守、孤城用据险；粮紧用漕运、政令不足用庙算、兵额常满用众兵——文臣任分路时补半额政令与漕粮。主帅总戎事，战法与朝政及于全军；分帅只节制驻节本城，另置幕府耗缗钱与粮，且诸将分镇、主和渐长。一州不置二节，换将则旧驻节作废。</p>
       </section>
       ${ecoOn ? econRosterHtml(s) : ''}
-    `;
+    `);
 
     const c = selected ? s.cities[selected] : null;
     const sup = supplyMap(s);
@@ -784,7 +785,7 @@ export function createUI(root, state, opts = {}) {
         </button>`;
     };
 
-    el.right.innerHTML = `
+    el.right.innerHTML = tx(`
       <section class="card city-card">
         <div class="card-eyebrow">州郡舆情</div>
         ${c ? `
@@ -851,21 +852,21 @@ export function createUI(root, state, opts = {}) {
       </section>
 
       <button class="end-turn" data-act="end-turn"><span>结束回合</span><em>空格 →</em></button>
-    `;
+    `);
 
     el.log.classList.toggle('collapsed', logCollapsed);
-    el.log.innerHTML = `
+    el.log.innerHTML = tx(`
       <div class="log-head"><span>起居注 · 军报</span><i data-act="toggle-log" title="展开／收起">${logCollapsed ? '展开 ▴' : `收起 ▾ · ${s.logs.length} 条`}</i></div>
       <div class="log-list">${s.logs.slice(0, 40).map(l => `
         <div class="log-item ${l.type}"><span class="log-turn">${esc(l.tag.split(' · ')[0])}</span><p>${esc(l.text)}</p></div>`).join('')}
-      </div>`;
+      </div>`);
 
     if (marchFrom) {
       el.hint.hidden = false;
-      el.hint.innerHTML = `<span class="pulse"></span>进军：自 <b>${esc(s.cities[marchFrom].name)}</b> 点选相邻州郡，或于右栏「进兵推演」择胜算而行<button data-act="cancel-march">取消 · Esc</button>`;
+      el.hint.innerHTML = tx(`<span class="pulse"></span>进军：自 <b>${esc(s.cities[marchFrom].name)}</b> 点选相邻州郡，或于右栏「进兵推演」择胜算而行<button data-act="cancel-march">取消 · Esc</button>`);
     } else {
       el.hint.hidden = true;
-      el.hint.innerHTML = '';
+      el.hint.innerHTML = tx('');
     }
 
     el.right.classList.toggle('marching', !!marchFrom);
@@ -880,22 +881,22 @@ export function createUI(root, state, opts = {}) {
   function updateAutoHud() {
     if (!el.autoHud) return;
     const total = Object.keys(state.cities).length;
-    el.autoPhase.textContent = phaseOf(state);
-    el.autoRound.textContent = `第 ${auto.game} 局 · ${state.yearName} · 第 ${state.turn}/${state.maxTurns} 回合`;
-    el.autoDecision.textContent = auto.decision || '整军待发……';
+    el.autoPhase.textContent = tx(phaseOf(state));
+    el.autoRound.textContent = tx(`第 ${auto.game} 局 · ${state.yearName} · 第 ${state.turn}/${state.maxTurns} 回合`);
+    el.autoDecision.textContent = tx(auto.decision || '整军待发……');
     el.autoBar.style.width = `${Math.round(state.songCities.length / total * 100)}%`;
-    el.autoProgress.textContent = `版籍 ${state.songCities.length}/${total} · 已下 ${auto.actions} 令`;
+    el.autoProgress.textContent = tx(`版籍 ${state.songCities.length}/${total} · 已下 ${auto.actions} 令`);
     el.autoHud.classList.toggle('paused', auto.paused);
     const done = !auto.running && !!state.over;
     el.autoPause.hidden = done;
     el.autoSpeed.hidden = done;
     el.autoRestart.hidden = !(state.over?.kind === 'win');
-    el.autoStop.textContent = done ? '收起' : '停止';
+    el.autoStop.textContent = tx(done ? '收起' : '停止');
   }
 
   function setAutoDecision(text) {
     auto.decision = text;
-    el.autoDecision.textContent = text;
+    el.autoDecision.textContent = tx(text);
   }
 
   async function autoDelay(token, factor = 1) {
@@ -997,10 +998,10 @@ export function createUI(root, state, opts = {}) {
     auto.token++;
     el.autoHud.hidden = false;
     el.autoHud.classList.remove('paused');
-    el.autoBtn.textContent = '■';
+    el.autoBtn.textContent = tx('■');
     el.autoBtn.classList.add('on');
-    el.autoPause.textContent = '暂停';
-    el.autoSpeed.textContent = `×${auto.speed}`;
+    el.autoPause.textContent = tx('暂停');
+    el.autoSpeed.textContent = tx(`×${auto.speed}`);
     marchFrom = null;
     updateAutoHud();
     persist();
@@ -1013,9 +1014,9 @@ export function createUI(root, state, opts = {}) {
     auto.running = false;
     auto.paused = false;
     auto.token++;
-    el.autoBtn.textContent = '▶';
+    el.autoBtn.textContent = tx('▶');
     el.autoBtn.classList.remove('on');
-    el.autoPause.textContent = '暂停';
+    el.autoPause.textContent = tx('暂停');
     el.autoHud.classList.remove('paused');
     if (!keepHud) el.autoHud.hidden = true;
     updateAutoHud();
@@ -1131,14 +1132,14 @@ export function createUI(root, state, opts = {}) {
     if (act === 'auto' || act === 'auto-start') { toggleAuto(); return; }
     if (act === 'auto-pause') {
       auto.paused = !auto.paused;
-      el.autoPause.textContent = auto.paused ? '继续' : '暂停';
+      el.autoPause.textContent = tx(auto.paused ? '继续' : '暂停');
       el.autoHud.classList.toggle('paused', auto.paused);
       sfx('click');
       return;
     }
     if (act === 'auto-speed') {
       auto.speed = SPEEDS[(SPEEDS.indexOf(auto.speed) + 1) % SPEEDS.length];
-      el.autoSpeed.textContent = `×${auto.speed}`;
+      el.autoSpeed.textContent = tx(`×${auto.speed}`);
       sfx('click');
       return;
     }
@@ -1429,7 +1430,7 @@ export function createUI(root, state, opts = {}) {
   function showEvent(ev) {
     if (auto.running) return;   // 托管期间由推演循环裁断，不弹窗打断
     sfx('event');
-    el.eventBody.innerHTML = `
+    el.eventBody.innerHTML = tx(`
       <div class="event-card">
         <div class="event-top"><span class="event-tag">${esc(ev.tag)}</span>${ev.priority ? '<span class="event-chain">前后相因</span>' : ''}<span class="event-era">${esc(state.yearName)} · 第 ${state.turn} 回合</span></div>
         <h2>${esc(ev.title)}</h2>
@@ -1442,7 +1443,7 @@ export function createUI(root, state, opts = {}) {
               <b>${esc(o.label)}</b><span>${esc(o.desc)}</span><i>${'壹贰叁肆'.slice(i, i + 1) || i + 1}</i>
             </button>`).join('')}
         </div>
-      </div>`;
+      </div>`);
     el.eventModal.hidden = false;
   }
 
@@ -1453,7 +1454,7 @@ export function createUI(root, state, opts = {}) {
     renderIntro();
     sfx(over.kind === 'win' ? 'win' : 'lose');
     const songN = state.songCities.length;
-    el.endBody.innerHTML = `
+    el.endBody.innerHTML = tx(`
       <div class="end-card ${over.kind}">
         <div class="end-seal">${over.kind === 'win' ? '中<br>兴' : '南<br>渡'}</div>
         <div class="eyebrow">${state.scenario ? `${esc(state.scenario.name)} · ` : ''}${over.kind === 'win' ? '大 功 告 成' : '大 势 已 去'}</div>
@@ -1466,7 +1467,7 @@ export function createUI(root, state, opts = {}) {
           <div><span>民心</span><b>${state.popularity}</b></div>
         </div>
         <button class="btn-primary big" data-act="restart-game">再开一局 <em>→</em></button>
-      </div>`;
+      </div>`);
     el.endModal.hidden = false;
     marchFrom = null;
     render();
@@ -1478,7 +1479,7 @@ export function createUI(root, state, opts = {}) {
   state.on('march', payload => world?.march(payload));
 
   root.dataset.drawer = 'none';
-  el.muteBtn.textContent = isMuted() ? '♪̸' : '♪';
+  el.muteBtn.textContent = tx(isMuted() ? '♪̸' : '♪');
   el.muteBtn.classList.toggle('off', isMuted());
   updateUndoTool();
   render();

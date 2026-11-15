@@ -36,9 +36,10 @@ test('出厂默认：增强与贴图全关，资产全开，自动档', () => {
   assert.equal(values.seed, '');
   assert.equal(values.auto, false);
   assert.equal(values.mute, false);
+  assert.equal(values.lang, 'zh', '中文为默认，英文版需显式 ?lang=en');
   assert.ok(Object.values(sources).every(s => s === 'default'));
   assert.equal(SETTING_GROUPS.length, 3);
-  assert.equal(SETTING_ITEMS.length, 17);
+  assert.equal(SETTING_ITEMS.length, 18);
 });
 
 test('历史 URL 参数语义全部保留', () => {
@@ -74,7 +75,7 @@ test('历史 URL 参数语义全部保留', () => {
   assert.equal(readSettings('?scenario=nope', makeStore()).values.scenario, 'campaign');
   assert.deepEqual(new Set(knownUrlKeys), new Set([
     'ink', 'mat', 'grade', 'trees', 'tex', 'ctex', 'units', 'capitals', 'quality', 'motion', 'terrain',
-    'scenario', 'difficulty', 'seed', 'auto', 'mute', 'economy',
+    'scenario', 'difficulty', 'seed', 'auto', 'mute', 'economy', 'lang',
   ]));
 });
 

@@ -14,7 +14,9 @@
     "verify:dist": "node scripts/verify/dist-smoke.mjs",
     "verify:browser": "node scripts/verify/browser-smoke.mjs",
     "verify:browser:mobile": "node scripts/verify/browser-smoke.mjs --mobile",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "i18n:audit": "node scripts/i18n-audit.mjs",
+    "verify:browser:en": "node scripts/verify/browser-smoke.mjs --lang=en"
   },
   "engines": {
     "node": ">=22"
