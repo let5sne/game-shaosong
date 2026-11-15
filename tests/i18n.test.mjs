@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { setLang, getLang, tx, tt, untranslated } from '../src/i18n.js';
 import { readSettings, encodeSearch, derive } from '../src/settings.js';
+import { HEROES } from '../src/data.js';
 
 const zh = s => /[\u4e00-\u9fff]/.test(s);
 
@@ -71,5 +72,36 @@ test('英文模式：门面文案整句精译（不由词典拼凑）', () => {
     'You are the Regent, elected for a three-year mandate: muster, levy, hold the Council, recover the old capital —');
   assert.equal(tx('在北廷再度南下之前，把版籍一寸一寸收回来。'),
     'before the Northern Court drives south again, win the register back, prefecture by prefecture.');
+  setLang('zh');
+});
+
+test('英文模式：变量模板整句精译，数字按序填回', () => {
+  setLang('en');
+  assert.equal(tx('【治略·度支】屯田增赋 6，市舶 +3 钱，作坊 +2 军械（存 9），仓廪省戍粮 12。'),
+    '[Administration · Revenue] Farms +6 levy, trade +3 coin, armory +2 arms (9 in stock), granary saves 12 garrison grain.');
+  assert.equal(tx('（耗军械 4，器械精利）'), '(costs 4 arms; equipment honed)');
+  assert.match(tx('差遣每员每回合一次、全朝至多 3 遣（本回合余 2）；阅历由差遣、实战与驻节积攒，Lv3／Lv5 各悟一条专属战法，'),
+    /up to 3 dispatches court-wide \(2 left this turn\)/);
+  // 真实人物数据：人名、战法名、长评语都作为插值，仍要整句精译且不留中文
+  for (const h of HEROES) {
+    const s = `【拜将】以${h.name}为都督诸军事，领「${h.art?.name || '诸军'}」。朝野议论纷然：${h.desc}`;
+    const out = tx(s);
+    assert.ok(out.startsWith('[Appointment]'), `拜将战报应走整句精译：${out}`);
+    assert.ok(!zh(out), `不应残留中文：${s} → ${out}`);
+    assert.deepEqual(untranslated(s), []);
+  }
+  setLang('zh');
+  assert.equal(tx('（耗军械 4，器械精利）'), '（耗军械 4，器械精利）', '中文模式不受模板影响');
+});
+
+test('英文模式：带缩进空白的文本段仍命中整句精译，长段落不退回词典', () => {
+  setLang('en');
+  const indented = '\n        中文为默认；English 可用 ?lang=en 直接打开。切换后重载页面，只改屏幕文字，不动规则、存档与固定局号。\n      ';
+  const out = tx(indented);
+  assert.ok(out.startsWith('\n        ') && out.includes('Chinese is the default'), `应保留空白并整句精译：${out}`);
+  assert.ok(!zh(out));
+  const long = tx('度支使邓缓呈上漕粮折算：一次北进，耗江南两年积谷；州郡愈北，转运愈贵。请先行停边、与民休息。朝议汹汹。');
+  assert.ok(long.startsWith('Deng Huan, Commissioner of Revenue'), `长段落应整句精译：${long}`);
+  assert.ok(!zh(long));
   setLang('zh');
 });

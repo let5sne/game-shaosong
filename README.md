@@ -14,7 +14,7 @@
 
 无需本地安装，直接打开 **https://let5sne.github.io/game-shaosong/** 即可试玩。
 
-站点由 `.github/workflows/deploy.yml` 自动发布：每次推送 `main` 都会执行 `npm ci` → 单元测试 → 数值平衡护栏 → `npm run build` → 构建产物体检 → 无头 Chrome 实机 smoke，全部通过后把 `dist/` 部署到 GitHub Pages，并在 Actions 中留一份可下载的构建包 `shaosong-dist`；也可在 Actions 页手动触发。构建使用相对路径 `base: './'`，因此站点挂在仓库子路径下也能正常加载模型与字体。
+站点由 `.github/workflows/deploy.yml` 自动发布：每次推送 `main` 都会执行 `npm ci` → 单元测试 → 代码检查 → 英文覆盖率门禁 → 数值平衡护栏 → `npm run build` → 构建产物体检 → 无头 Chrome 实机 smoke（常规／省电／窄屏／英文四种），全部通过后把 `dist/` 部署到 GitHub Pages，并在 Actions 中留一份可下载的构建包 `shaosong-dist`；也可在 Actions 页手动触发。构建使用相对路径 `base: './'`，因此站点挂在仓库子路径下也能正常加载模型与字体。
 
 ## 运行
 
@@ -65,11 +65,11 @@ npm run preview    # 预览构建产物
 英文化采用**渲染边界覆盖层**，不是把中文从源码里抽走：
 
 - `data.js` / `rules.js` / `settings.js` 仍以中文为唯一真源；它们同时是存档内容、单测断言与平衡护栏的依据，抽出会扰动可复现基线。
-- `src/i18n.js` 的 `tx()` 只在 DOM 写入点（`ui.js` 的 innerHTML / textContent、`main.js`、贴图文字 `models.js`）翻译；`src/locales/en.js` 是英文覆盖表，`EN_STRINGS` 整句精译优先，`EN_PHRASES` 长词优先兜底。
+- `src/i18n.js` 的 `tx()` 只在 DOM 写入点（`ui.js` 的 innerHTML / textContent、`main.js`、贴图文字 `models.js`）翻译；`src/locales/en.js` 是英文覆盖表，优先级为 `EN_STRINGS` 整句精译 → `EN_TEMPLATES` 含变量整句精译（键中 `#` 是数字／人名／城名等插值位，编译成整段正则，取到的值先翻译再按 `{0}` `{1}` 填回）→ `EN_PHRASES` 长词优先兜底。带缩进空白的 HTML 文本段会先去掉首尾空白查表、再嵌回原空白，保证静态审计与实机命中同一份键。
 - 语言不进规则层、不进随机源、不写存档；`rules.js` / `save.js` 不 import i18n。中文模式下 `tx()` 逐字原样返回，关闭态与改造前完全一致。
 - `index.html` 的 OG/Twitter 卡固定英文供海外抓取；文档标题与 `<html lang>` 由 `main.js` 按语言切换，印章改用中英通用的字母 R。
 
-`npm run i18n:audit` 静态抽出所有玩家可见中文串、模拟英文渲染，按残留汉字数给出覆盖率与待补词条清单（`--json` 输出完整清单；译文补全后可用 `--strict` 接入 CI）。当前静态覆盖约 98%；开场页整页模板、首局引导与实机可见文本已做到**零中文残留**（`npm run verify:browser:en` 实测 0 字）。门面文案与专有名词为人工精译；剩余主要在动态战报与长段说明，由词典直译，仍待人工润色。
+`npm run i18n:audit` 按真实渲染边界抽出玩家可见的中文文本段（模板插值统一记作 `#`），模拟英文翻译后按残留汉字数给出覆盖率与待补清单（`--json` 输出完整清单）。当前静态覆盖 **100%（1021 段 / 9909 字，残留 0 字）**：门面、设置说明、事件剧情、结局与动态战报均已人工逐句精译，不再依赖词典拼贴；`npm run i18n:audit:strict` 已接入 CI，新增中文文案未同步英文表即构建失败。`npm run verify:browser:en` 另在实机核对文档语言、标题、门面中文残留计数与控制台错误（实测 0 字、0 错误）。静态审计的边界是插值处若传入未被词表覆盖的中文专名，需由实机 smoke 与 `tests/i18n.test.mjs` 中的真实人物数据用例兜底。
 
 隐私与第三方许可说明见 [privacy.html](./public/privacy.html)（中英双语、纯静态、无外部请求）。
 
@@ -108,7 +108,8 @@ npm run preview    # 预览构建产物
 ```bash
 npm test                  # node:test 单元测试
 npm run lint              # ESLint：未定义/未使用变量、重复声明、不可达代码
-npm run i18n:audit       # 英文覆盖率与待补词条清单（--json / --strict）
+npm run i18n:audit       # 英文覆盖率与待补词条清单（--json）
+npm run i18n:audit:strict # 英文覆盖率门禁：残留汉字 > 0 即失败（已接入 CI）
 npm run balance           # 300 局 × 三档难度 + 两剧本，数值护栏回归
 npm run balance:economy   # 治略模式的独立护栏
 npm run build             # 构建
@@ -119,7 +120,7 @@ npm run verify:browser:mobile              # 同上，390×844@3x 窄屏：自�
 npm run verify:browser:en                  # 英文版实机 smoke：文档语言、标题、门面与中文残留计数
 ```
 
-`vite.config.js` 把 `chunkSizeWarningLimit` 设为 600 KB：three 核心约 530 KB 是第三方固有体积，已单独成块并异步加载，不压首屏关键路径。`verify:dist` 会按 index ≤ 200 KB / world ≤ 100 KB / three ≤ 600 KB / css ≤ 80 KB 的预算逐项复核，超预算直接失败。上述检查已全部接入 CI（`.github/workflows/deploy.yml`）；本机若没有 Chrome，`verify:browser` 会打印 `SKIP` 并以 0 退出，不制造假红灯。
+`vite.config.js` 把 `chunkSizeWarningLimit` 设为 600 KB：three 核心约 530 KB 是第三方固有体积，已单独成块并异步加载，不压首屏关键路径；英文覆盖表文本量大且随译文增补，也单独拆成 `locale-en` 块，避免把 index 主包顶过预算。`verify:dist` 会按 index ≤ 200 KB / world ≤ 100 KB / three ≤ 600 KB / locale-en ≤ 60 KB / css ≤ 80 KB 的预算逐项复核，且要求 `locale-en` 必须存在，超预算或拆分失效直接失败。上述检查已全部接入 CI（`.github/workflows/deploy.yml`）；本机若没有 Chrome，`verify:browser` 会打印 `SKIP` 并以 0 退出，不制造假红灯。
 
 ## 资产
 

@@ -40,6 +40,11 @@ jobs:
       - name: 代码检查
         run: npm run lint
 
+      # 新增中文文案必须同步英文覆盖表：按真实渲染文本段模拟英文翻译，
+      # 残留汉字 > 0 即失败，避免英文版悄悄漏字。
+      - name: 英文覆盖率门禁
+        run: npm run i18n:audit:strict
+
       # 规则层改动不能只看单测：批量模拟的胜率／回合数护栏一起进 CI，
       # 否则数值漂移时测试全绿照样能上线。两套合计约 25 秒。
       - name: 数值平衡护栏
@@ -62,6 +67,10 @@ jobs:
       # 窄屏 390×844：验证 autoQuality 自动降档、760px 布局生效、无横向溢出
       - name: 窄屏 WebGL smoke
         run: npm run verify:browser:mobile
+
+      # ?lang=en：文档语言、标题、门面中文残留计数与控制台错误
+      - name: 英文版 WebGL smoke
+        run: npm run verify:browser:en
 
       # 静态资源直接部署，绕过 Jekyll；vite base 为 './'，站点可挂在任意子路径
       - name: 添加 .nojekyll

@@ -208,8 +208,7 @@ try {
   check(count(/\.png($|\?)/) >= wantPng, `${probe.quality} 档贴图 ≥ ${wantPng}`, String(count(/\.png($|\?)/)));
   check(count(/shaosong-serif-400\.woff2/) > 0, '400 字重已加载');
 
-  // 英文版专项：只断言语言切换与门面已生效；中文残留数作为覆盖率信息输出，
-  // 不设硬阈值（译文仍在迭代，硬阈值会让 CI 因文案而非功能变红）。
+  // 英文版专项：门面整句精译已完成，中文残留与静态覆盖率门禁同源，改为硬断言。
   if (LANG_EN || URL.includes('lang=en')) {
     const e = await evaluate(s, `(() => {
       const ui = document.getElementById('ui');
@@ -225,8 +224,31 @@ try {
     check(e.lang === 'en', '文档语言 = en', e.lang);
     check(e.title.includes('The Register'), '英文文档标题', e.title);
     check(e.hasEnglish, '门面文案已英文化');
-    console.log(`info  开场页中文残留 ${e.zh} 字（详见 npm run i18n:audit）`);
+    check(e.zh === 0, '开场页零中文残留', `${e.zh} 字`);
     for (const line of e.zhLines) console.log(`      ↳ ${line.trim().slice(0, 90)}`);
+
+    // 静态审计用 # 模拟插值，实机再进一次对局：动态战报、卡片说明与设置文案走真实插值路径。
+    const entered = await evaluate(s, `(() => {
+      const btn = document.getElementById('startBtn');
+      if (!btn) return false;
+      btn.click();
+      return true;
+    })()`);
+    check(entered, '可进入对局');
+    await waitFor(s, `!document.getElementById('ui').classList.contains('intro-active')`, 10000);
+    await sleep(900);
+    const g = await evaluate(s, `(() => {
+      const ui = document.getElementById('ui');
+      const text = ui ? ui.innerText : '';
+      return {
+        zh: (text.match(/[\\u4e00-\\u9fff]/g) || []).length,
+        lines: text.split('\\n').filter(l => /[\\u4e00-\\u9fff]/.test(l)).slice(0, 8),
+        started: !ui.classList.contains('intro-active'),
+      };
+    })()`);
+    check(g.started, '开场层已收起');
+    check(g.zh === 0, '对局界面零中文残留', `${g.zh} 字`);
+    for (const line of g.lines) console.log(`      ↳ ${line.trim().slice(0, 90)}`);
   }
 
   // 窄屏专项：媒体查询、自动降档、顶栏紧凑布局、无横向溢出、触摸可用。

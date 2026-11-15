@@ -57,6 +57,8 @@ const chunk = prefix => assets.find(f => f.startsWith(prefix) && f.endsWith('.js
 const BUDGET = [
   ['index', chunk('index-'), 200], ['world', chunk('world-'), 100],
   ['three', chunk('three-'), 600], ['css', assets.find(f => f.endsWith('.css')), 80],
+  // 英文覆盖表必须独立成块：既守住 index 主包预算，也让译文增补可长期缓存
+  ['locale-en', chunk('locale-en-'), 60],
 ];
 for (const [name, file, kb] of BUDGET) {
   const p = `assets/${file}`;
