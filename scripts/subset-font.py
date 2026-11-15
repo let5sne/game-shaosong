@@ -16,7 +16,7 @@ Windows、macOS、Linux 拿到的宋体字形、字重与度量都不同，开�
     400 https://fonts.gstatic.com/s/notoserifsc/v36/H4cyBXePl9DZ0Xe7gG9cyOj7uK2-n-D2rd4FY7SCqyWv.ttf
     700 https://fonts.gstatic.com/s/notoserifsc/v36/H4cyBXePl9DZ0Xe7gG9cyOj7uK2-n-D2rd4FY7RlrCWv.ttf
 
-产物：public/fonts/shaosong-serif-{400,700}.woff2、scripts/subset-manifest.json
+产物：public/fonts/register-serif-{400,700}.woff2、scripts/subset-manifest.json
       （清单是构建期产物，运行时不读，不放进 public/ 以免随站点发布）
 许可：public/fonts/OFL.txt（OFL 要求随字体附带版权声明与许可副本）
 未收录的字符由 CSS 字体栈逐字符回退到系统宋体，不会出现豆腐块。
@@ -104,7 +104,7 @@ def subset_one(weight: int, text: str, fetch_missing: bool) -> dict:
     sub.subset(font)
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    out = OUT_DIR / f'shaosong-serif-{weight}.woff2'
+    out = OUT_DIR / f'register-serif-{weight}.woff2'
     subset.save_font(font, out, opts)
 
     # 统计真正落进字体的字符，供 Node 侧单测与后续文案核对
@@ -138,7 +138,7 @@ def main() -> None:
     for r in results[1:]:
         assert r.pop('_cmap') == baked_cps, '两个字重的字符集不一致'
     manifest = {
-        'family': 'Shaosong Serif',
+        'family': 'Register Serif',
         'source': 'Noto Serif SC (Google Fonts, SIL Open Font License 1.1)',
         'license': 'OFL.txt',
         'scanned': SCAN_GLOBS,

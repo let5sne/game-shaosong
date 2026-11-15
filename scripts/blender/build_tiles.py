@@ -16,7 +16,8 @@ import zlib
 import struct
 import numpy as np
 
-ROOT = 'E:/code/game-shaosong'
+# Repo root derived from this script; no machine-specific absolute path.
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 OUT = ROOT + '/public/textures/city-surface.png'
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
 

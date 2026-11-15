@@ -62,7 +62,7 @@ const ui = createUI(uiEl, state, {
 sceneEl.innerHTML = tx('<div class="scene-loading">三 维 舆 图 展 开 中 …</div>');
 
 // 调试／自动化入口：可在控制台查看局面、生效配置或启动托管推演
-window.__shaosong = {
+window.__register = {
   state, ui, world: null, fixedSeed, initialScenario, worldReady: null,
   quality, reducedMotion, ink, units, tex, ctex, capitals, trees, terrain, mat, grade, economy,
   renderMode: demandRender ? 'demand' : 'always', settings, derived: cfg,
@@ -82,7 +82,7 @@ async function mountWorld() {
     const { createWorld } = await import('./world.js');
     sceneEl.replaceChildren();
     const world = createWorld(sceneEl, state, { onPick: id => ui.handlePick(id), quality, reducedMotion, ink, units, tex, ctex, capitals, trees, terrain, mat, renderMode: demandRender ? 'demand' : 'always' });
-    window.__shaosong.world = world;
+    window.__register.world = world;
     ui.attachWorld(world);
     return world;
   } catch (err) {
@@ -95,4 +95,4 @@ async function mountWorld() {
 
 // 让开场页真正画出一帧，再把重量级的几何生成排到后面
 const nextPaint = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-window.__shaosong.worldReady = nextPaint().then(mountWorld);
+window.__register.worldReady = nextPaint().then(mountWorld);

@@ -3,14 +3,14 @@
    只含项目实际用到的 1651 字；未收录字由 --serif 后续栈逐字符回退，
    所以动态文案永远不会出现豆腐块。font-display:swap 保证首屏不被字体阻塞。 */
 @font-face {
-  font-family: "Shaosong Serif"; font-style: normal; font-weight: 400;
+  font-family: "Register Serif"; font-style: normal; font-weight: 400;
   font-display: swap;
-  src: url('/fonts/shaosong-serif-400.woff2') format('woff2');
+  src: url('/fonts/register-serif-400.woff2') format('woff2');
 }
 @font-face {
-  font-family: "Shaosong Serif"; font-style: normal; font-weight: 700;
+  font-family: "Register Serif"; font-style: normal; font-weight: 700;
   font-display: swap;
-  src: url('/fonts/shaosong-serif-700.woff2') format('woff2');
+  src: url('/fonts/register-serif-700.woff2') format('woff2');
 }
 
 :root {
@@ -25,7 +25,7 @@
   --gold-lt: #e2c282;
   --blue: #3d4b60;
   --line: rgba(96, 80, 52, .30);
-  --serif: "Shaosong Serif", "Songti SC", "STSong", "Noto Serif SC", "Source Han Serif SC", "SimSun", serif;
+  --serif: "Register Serif", "Songti SC", "STSong", "Noto Serif SC", "Source Han Serif SC", "SimSun", serif;
   --sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 

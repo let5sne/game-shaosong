@@ -12,7 +12,8 @@ import zlib
 import struct
 import numpy as np
 
-ROOT = 'E:/code/game-shaosong'
+# Repo root derived from this script; no machine-specific absolute path.
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 OUT = ROOT + '/public/textures/paper.png'
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
 
@@ -72,7 +73,7 @@ size = write_png(OUT, rgb)
 for o in bpy.data.objects:
     if o.name in ('Rider', 'Siege'):
         o.location = (0.0, 0.0, 0.0)
-bpy.ops.wm.save_as_mainfile(filepath=ROOT + '/assets/shaosong-units.blend')
+bpy.ops.wm.save_as_mainfile(filepath=ROOT + '/assets/register-units.blend')
 
 # 顺手校验四个边缘是否连续（可平铺）
 edge = (float(np.abs(rgb[0].astype(int) - rgb[-1].astype(int)).mean()),

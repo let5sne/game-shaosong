@@ -40,7 +40,7 @@ const RUNTIME = [
   'models/units.glb', 'models/trees.glb', 'models/capitals.glb',
   'textures/paper.png', 'textures/city-surface.png',
   'textures/terrain-detail.png', 'textures/terrain-normal.png',
-  'fonts/shaosong-serif-400.woff2', 'fonts/shaosong-serif-700.woff2',
+  'fonts/register-serif-400.woff2', 'fonts/register-serif-700.woff2',
   'fonts/OFL.txt',
 ];
 for (const p of RUNTIME) check(existsSync(join(DIST, p)) && size(p) > 0, `运行时资源：${p}`);

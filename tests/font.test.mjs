@@ -14,7 +14,7 @@ const css = readFileSync('src/style.css', 'utf8');
 const html = readFileSync('index.html', 'utf8');
 
 test('清单声明两个权重、许可与来源', () => {
-  assert.equal(manifest.family, 'Shaosong Serif');
+  assert.equal(manifest.family, 'Register Serif');
   assert.match(manifest.source, /Noto Serif SC/);
   assert.match(manifest.source, /SIL Open Font License/);
   assert.equal(manifest.license, 'OFL.txt');
@@ -70,7 +70,7 @@ test('CSS 双权重 @font-face、字体栈首位与系统回退', () => {
     assert.ok(css.includes(`font-weight: ${f.weight};`));
     assert.ok(css.includes('font-display: swap'));
   }
-  assert.match(css, /--serif:\s*"Shaosong Serif",\s*"Songti SC"/);
+  assert.match(css, /--serif:\s*"Register Serif",\s*"Songti SC"/);
   assert.match(css, /"SimSun", serif;/);   // 子集未收录字仍能逐字符回退
 });
 

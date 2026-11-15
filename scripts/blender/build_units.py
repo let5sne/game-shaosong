@@ -5,15 +5,16 @@
 顶点色只写灰度明暗，运行时由材质乘上宋／金阵营色。
 
 产物：
-  assets/shaosong-units.blend   可编辑源文件
+  assets/register-units.blend   可编辑源文件
   public/models/units.glb       Rider（骑兵）+ Siege（投石机）
 """
 import bpy
 import math
 import os
 
-ROOT = 'E:/code/game-shaosong'
-BLEND = ROOT + '/assets/shaosong-units.blend'
+# Repo root derived from this script; no machine-specific absolute path.
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+BLEND = ROOT + '/assets/register-units.blend'
 GLB = ROOT + '/public/models/units.glb'
 for d in (ROOT + '/assets', ROOT + '/public/models', ROOT + '/public/textures'):
     os.makedirs(d, exist_ok=True)

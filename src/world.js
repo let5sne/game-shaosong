@@ -810,7 +810,7 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
         outgoingLight = mix(outgoingLight, uWaterSky, waterFres * uWaterFresnel);
         #include <opaque_fragment>`);
   };
-  seaMat.customProgramCacheKey = () => 'shaosong-sea-wave-fresnel';
+  seaMat.customProgramCacheKey = () => 'register-sea-wave-fresnel';
   const sea = new THREE.Mesh(seaGeo, seaMat);
   sea.renderOrder = 1;
   scene.add(sea);
@@ -885,7 +885,7 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
         outgoingLight = mix(outgoingLight, uWaterSky, waterFres * uWaterFresnel * 0.7);
         #include <opaque_fragment>`);
   };
-  riverMesh.material.customProgramCacheKey = () => 'shaosong-river-fresnel';
+  riverMesh.material.customProgramCacheKey = () => 'register-river-fresnel';
   riverMesh.renderOrder = 3; scene.add(riverMesh);
   const glintMesh = new THREE.Mesh(mergeAll(glints), new THREE.MeshBasicMaterial({
     map: waterTexRiver, vertexColors: true, transparent: true, opacity: 0.62,
@@ -1055,7 +1055,7 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
           #endif
         `);
     };
-    treeMat.customProgramCacheKey = () => 'shaosong-tree-wind';
+    treeMat.customProgramCacheKey = () => 'register-tree-wind';
     for (const [kind, name] of Object.entries(TREE_MESHES)) {
       const im = vegMeshes[kind], geo = geos[name];
       if (!im || !geo) continue;
@@ -1867,17 +1867,17 @@ export function createWorld(container, state, { onPick, quality = 'high', reduce
         if (geos.Siege) buildSiege();
         update(state);
       })
-      .catch(err => console.warn('[shaosong] Blender 资产未载入，沿用程序化几何：', err));
+      .catch(err => console.warn('[register] Blender 资产未载入，沿用程序化几何：', err));
   }
   if (capitals) {
     loadCapitalLibrary()
       .then(geos => attachCapitals(geos))
-      .catch(err => console.warn('[shaosong] 两京增饰未载入，沿用程序化城池：', err));
+      .catch(err => console.warn('[register] 两京增饰未载入，沿用程序化城池：', err));
   }
   if (useTrees) {
     loadTreeLibrary()
       .then(geos => applyTreeLibrary(geos))
-      .catch(err => console.warn('[shaosong] 高清树木未载入，沿用程序化树：', err));
+      .catch(err => console.warn('[register] 高清树木未载入，沿用程序化树：', err));
   }
 
   // 可在运行时整层开关，便于同一局面／同一相机做 A/B 截图

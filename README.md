@@ -14,7 +14,7 @@
 
 无需本地安装，直接打开 **https://let5sne.github.io/game-shaosong/** 即可试玩。
 
-站点由 `.github/workflows/deploy.yml` 自动发布：每次推送 `main` 都会执行 `npm ci` → 单元测试 → 代码检查 → 英文覆盖率门禁 → 数值平衡护栏 → `npm run build` → 构建产物体检 → 无头 Chrome 实机 smoke（常规／省电／窄屏／英文四种），全部通过后把 `dist/` 部署到 GitHub Pages，并在 Actions 中留一份可下载的构建包 `shaosong-dist`；也可在 Actions 页手动触发。构建使用相对路径 `base: './'`，因此站点挂在仓库子路径下也能正常加载模型与字体。
+站点由 `.github/workflows/deploy.yml` 自动发布：每次推送 `main` 都会执行 `npm ci` → 单元测试 → 代码检查 → 英文覆盖率门禁 → 数值平衡护栏 → `npm run build` → 构建产物体检 → 无头 Chrome 实机 smoke（常规／省电／窄屏／英文四种），全部通过后把 `dist/` 部署到 GitHub Pages，并在 Actions 中留一份可下载的构建包 `register-dist`；也可在 Actions 页手动触发。构建使用相对路径 `base: './'`，因此站点挂在仓库子路径下也能正常加载模型与字体。
 
 ## 运行
 
@@ -131,7 +131,7 @@ npm run verify:browser:en                  # 英文版实机 smoke：文档语�
 | 分支 | 内容 |
 | --- | --- |
 | `main` | 默认分支：原创架空设定的长局、两关短剧本与治略等引擎工作 |
-| `chixie` | 独立的观感与叙事实验分支：近观机位、浅水、场景文案等选项；题材与授权状态需单独定性，见「声明」 |
+| `chixie` | 独立实验分支：近观机位、浅水、场景文案等观感与叙事实验；保持独立，不并入 `main`、不参与 Pages 部署与发行，见「声明」 |
 
 ## 声明
 
@@ -139,6 +139,6 @@ npm run verify:browser:en                  # 英文版实机 smoke：文档语�
 
 本仓库以 **MIT 许可证**开源，见 [LICENSE](./LICENSE)：允许复制、修改与再发布（含商业用途），须保留版权与许可声明。字体子集遵循 `public/fonts/OFL.txt`（SIL OFL 1.1），`three` 与 `vite` 遵循各自许可证。若后续发行策略要求更严格的条款，应另行替换许可证。
 
-零后端、无账号、无埋点：存档仅存于本机浏览器，不上传；详见中英双语的 [privacy.html](./public/privacy.html)。线上 Pages 只部署 `main`；`chixie` 为独立实验分支，含自有的一套叙事实验内容，其题材与去留需单独定性，不在本次确权范围内。
+零后端、无账号、无埋点：存档仅存于本机浏览器，不上传；详见中英双语的 [privacy.html](./public/privacy.html)。线上 Pages 只部署 `main`；`chixie` 是独立实验分支，不并入 `main`，也不在发行与本次确权范围内。其叙事内容与授权状态由该分支单独处理，不倒灌进 `main`。
 
-仓库名、Pages 地址、构建产物名、npm 包名与字体文件名仍沿用 `shaosong` 系列命名，属历史遗留的技术标识，与故事内容无关；若正式对外发行，需一并更名并复核 CI 与资源路径。
+项目技术标识已统一为 `register`：包名 `the-register`、字体 `register-serif-*`、构建包 `register-dist`、日志与调试入口均用这一词根。仍保留 `shaosong` 的有三类：仓库名与 Pages 地址（改名会使旧链接失效，须在 GitHub 网页端操作）、`localStorage` 键名（存档兼容契约，改动会让旧存档丢失）、以及隐私页对键名的如实说明。LICENSE 版权人已改为 `The Register authors`。

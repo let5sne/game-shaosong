@@ -564,7 +564,7 @@ export function makeFlagMaterial(tex, uTime, width) {
         transformed.y += cos(fk * 5.5 - uTime * 2.4) * 0.05 * fk;
       `);
   };
-  m.customProgramCacheKey = () => 'shaosong-flag-wave';
+  m.customProgramCacheKey = () => 'register-flag-wave';
   return m;
 }
 

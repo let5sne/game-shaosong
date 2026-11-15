@@ -141,7 +141,7 @@ try {
   }
   if (!await httpReady(URL)) throw new Error(`目标不可达：${URL}`);
 
-  profile = mkdtempSync(join(tmpdir(), 'shaosong-smoke-'));
+  profile = mkdtempSync(join(tmpdir(), 'register-smoke-'));
   children.push(spawn(CHROME, [
     '--headless=new', `--remote-debugging-port=${PORT}`, `--user-data-dir=${profile}`,
     '--no-first-run', '--no-default-browser-check', '--no-sandbox', '--disable-gpu-sandbox',
@@ -171,18 +171,18 @@ try {
   await s.send('Page.navigate', { url: URL });
 
   check(await waitFor(s, 'document.readyState === "complete"'), 'DOM ready');
-  check(await waitFor(s, 'window.__shaosong && window.__shaosong.world'), '三维舆图异步 chunk 挂载');
+  check(await waitFor(s, 'window.__register && window.__register.world'), '三维舆图异步 chunk 挂载');
 
   // 按「生效档位」定期望：low 档会跳过树木 GLB 与高清贴图，不能一刀切。
   const probe = await evaluate(s, `(() => {
-    const gl = window.__shaosong?.world?.renderer?.getContext?.();
+    const gl = window.__register?.world?.renderer?.getContext?.();
     return {
       webgl: !!gl,
       glError: gl ? gl.getError() : -1,
-      drawCalls: window.__shaosong?.world?.renderer?.info?.render?.calls ?? 0,
-      quality: window.__shaosong?.world?.quality ?? 'high',
-      renderMode: window.__shaosong?.renderMode ?? 'always',
-      perfMode: window.__shaosong?.world?.perf?.mode ?? 'always',
+      drawCalls: window.__register?.world?.renderer?.info?.render?.calls ?? 0,
+      quality: window.__register?.world?.quality ?? 'high',
+      renderMode: window.__register?.renderMode ?? 'always',
+      perfMode: window.__register?.world?.perf?.mode ?? 'always',
     };
   })()`);
   const wantMode = URL.includes('render=demand') ? 'demand' : 'always';
@@ -206,7 +206,7 @@ try {
   check(count(/three-.*\.js/) > 0 && count(/world-.*\.js/) > 0, 'three / world 两个 chunk 已加载');
   check(count(/\.glb($|\?)/) >= wantGlb, `${probe.quality} 档 GLB ≥ ${wantGlb}`, String(count(/\.glb($|\?)/)));
   check(count(/\.png($|\?)/) >= wantPng, `${probe.quality} 档贴图 ≥ ${wantPng}`, String(count(/\.png($|\?)/)));
-  check(count(/shaosong-serif-400\.woff2/) > 0, '400 字重已加载');
+  check(count(/register-serif-400\.woff2/) > 0, '400 字重已加载');
 
   // 英文版专项：门面整句精译已完成，中文残留与静态覆盖率门禁同源，改为硬断言。
   if (LANG_EN || URL.includes('lang=en')) {
@@ -265,7 +265,7 @@ try {
       if (intro) ui.classList.add('intro-active');
       return {
         narrow: matchMedia('(max-width: 760px)').matches,
-        quality: window.__shaosong?.quality ?? '?',
+        quality: window.__register?.quality ?? '?',
         topbarH: h,
         intro,
         overflow: document.documentElement.scrollWidth - window.innerWidth,

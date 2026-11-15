@@ -1,5 +1,5 @@
 {
-  "family": "Shaosong Serif",
+  "family": "Register Serif",
   "source": "Noto Serif SC (Google Fonts, SIL Open Font License 1.1)",
   "license": "OFL.txt",
   "scanned": [
@@ -1634,7 +1634,7 @@
   "fonts": [
     {
       "weight": 400,
-      "file": "shaosong-serif-400.woff2",
+      "file": "register-serif-400.woff2",
       "bytes": 266104,
       "sha256": "bb70bf6ea7c6129923775982d0cf2ba6a83339fcba249620132ed92493188c90",
       "sourceBytes": 14785412,
@@ -1644,7 +1644,7 @@
     },
     {
       "weight": 700,
-      "file": "shaosong-serif-700.woff2",
+      "file": "register-serif-700.woff2",
       "bytes": 274720,
       "sha256": "39aaa1d117e1af6cf7fc54ac78278a1264213a1a567597bc222fc3a302bd46ef",
       "sourceBytes": 14784324,

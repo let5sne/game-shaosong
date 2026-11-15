@@ -23,7 +23,7 @@ const ZH = /[\u4e00-\u9fff]/;
 // 不进入界面的中文：shader 注释、诊断日志、异常文本、i18n 自身的说明
 const SKIP_FILES = new Set(['i18n.js', 'en.js', 'ink.js', 'world.js']);
 const SKIP_PATTERNS = [
-  /^\[shaosong\]/, /不支持的 componentType/, /GLB /, /不是 GLB/, /仅支持三角形/,
+  /^\[register\]/, /不支持的 componentType/, /GLB /, /不是 GLB/, /仅支持三角形/,
   /几何合并失败/, /带状几何合并失败/, /缺少两京网格/, /没有可用网格/,
 ];
 

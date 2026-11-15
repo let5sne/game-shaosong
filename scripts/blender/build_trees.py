@@ -17,7 +17,7 @@
   * 每个面独立顶点，便于 flatShading；不用透明贴图，避免排序与 overdraw。
 
 产物：
-  assets/shaosong-trees.blend   可编辑源文件
+  assets/register-trees.blend   可编辑源文件
   public/models/trees.glb        PineA / PineB / BroadA / BroadB
 """
 import bpy
@@ -26,8 +26,9 @@ import os
 import random
 from mathutils import Vector
 
-ROOT = 'E:/code/game-shaosong'
-BLEND = ROOT + '/assets/shaosong-trees.blend'
+# Repo root derived from this script; no machine-specific absolute path.
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+BLEND = ROOT + '/assets/register-trees.blend'
 GLB = ROOT + '/public/models/trees.glb'
 for d in (ROOT + '/assets', ROOT + '/public/models'):
     os.makedirs(d, exist_ok=True)

@@ -13,15 +13,16 @@
 运行时材质 vertexColors=true、color=白，直接与现有城池配色对齐。
 
 产物：
-  assets/shaosong-capitals.blend   可编辑源文件
+  assets/register-capitals.blend   可编辑源文件
   public/models/capitals.glb       Kaifeng（东京开封）+ Yanjing（燕京）
 """
 import bpy
 import math
 import os
 
-ROOT = 'E:/code/game-shaosong'
-BLEND = ROOT + '/assets/shaosong-capitals.blend'
+# Repo root derived from this script; no machine-specific absolute path.
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+BLEND = ROOT + '/assets/register-capitals.blend'
 GLB = ROOT + '/public/models/capitals.glb'
 os.makedirs(ROOT + '/assets', exist_ok=True)
 os.makedirs(ROOT + '/public/models', exist_ok=True)

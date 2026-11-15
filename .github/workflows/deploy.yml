@@ -79,7 +79,7 @@ jobs:
       - name: 上传可下载的构建包
         uses: actions/upload-artifact@v4
         with:
-          name: shaosong-dist
+          name: register-dist
           path: dist/
           retention-days: 14
 
