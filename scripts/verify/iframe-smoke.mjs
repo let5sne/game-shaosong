@@ -209,7 +209,7 @@ try {
     p.storage);
   check(p.replaceState, 'history.replaceState 写回可用', p.replaceError || p.search);
   console.log(`info  iframe 内存储状态：${p.storage}；该结论只对当前浏览器策略成立`);
-  console.log(`info  分享链接取到的是 iframe 自身地址：${p.href.slice(0, 100)}`);
+  console.log(`info  分享链接取到的是 iframe 自身地址：${p.href.slice(0, 100)} (local only; itch CDN is rewritten by shareUrl)`);
 
   const errs = c.errors();
   check(errs.length === 0, '控制台零错误', errs.slice(0, 3).map(e => e.method).join(', '));
