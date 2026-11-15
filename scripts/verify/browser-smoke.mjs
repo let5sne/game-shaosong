@@ -8,7 +8,8 @@
  *
  * 覆盖：DOM 就绪 / 三维挂载 / WebGL / glError / 打包 chunk / GLB 与贴图 / 控制台错误。
  *   --mobile 额外覆盖窄屏路径：390×844@3x + 触摸模拟、autoQuality 自动降档、760px 布局生效、无横向溢出。
- *   --lang=en 打开英文版专项：文档语言、标题、门面文案与界面中文残留计数。
+ *   --lang=en 打开英文版专项：文档语言、标题、门面文案与界面中文残留计数，
+ *     并固定 1280×800 视口做门面视觉回归（整句精译、无直译拼接、无溢出/重叠、两栏在 94vh 内）。
  * 不含像素 A/B、draw call 断言与任何部署地址；那部分仍留在本机私有脚本里。
  */
 import { spawn } from 'node:child_process';
@@ -167,6 +168,12 @@ try {
       width: 390, height: 844, deviceScaleFactor: 3, mobile: true,
     });
     await s.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+  } else if (LANG_EN) {
+    // Pin the English layout regression to the same 1280x800 canvas as the
+    // store screenshots; headless Chrome otherwise defaults to 800x600.
+    await s.send('Emulation.setDeviceMetricsOverride', {
+      width: 1280, height: 800, deviceScaleFactor: 1, mobile: false,
+    });
   }
   await s.send('Page.navigate', { url: URL });
 
@@ -232,6 +239,53 @@ try {
     check(e.hasEnglish, '门面文案已英文化');
     check(e.zh === 0, '开场页零中文残留', `${e.zh} 字`);
     for (const line of e.zhLines) console.log(`      ↳ ${line.trim().slice(0, 90)}`);
+
+    // Visual regression for the English opening page. The static i18n audit only
+    // proves "no CJK left", so word-by-word dictionary soup and overflowing text
+    // used to pass. These assertions pin the actual rendered result.
+    await sleep(900); // let the fade/slide intro animations settle before measuring
+    const face = await evaluate(s, `(() => {
+      const intro = document.getElementById('intro');
+      const pick = sel => intro.querySelector(sel);
+      const rect = e => e.getBoundingClientRect();
+      const text = intro.innerText;
+      const title = pick('.intro-title');
+      const sub = pick('.intro-sub');
+      const glued = [
+        'Yangtzeone', 'volumemaycontinue', 'the Regencyfirst', 'automaticallyattend',
+        'emptyset set', 'average asthis', 'choose  set  war  game', 'the Councilpeople',
+        'three volumemay', 'all map two ten four',
+      ].filter(w => text.toLowerCase().includes(w.toLowerCase()));
+      const panels = ['.intro-left', '.intro-right'].map(sel => {
+        const el = pick(sel);
+        const kids = [...el.children].map(rect);
+        let overlaps = 0;
+        for (let i = 1; i < kids.length; i++) if (kids[i].top + 1 < kids[i - 1].bottom) overlaps++;
+        return { sel, h: Math.round(rect(el).height),
+          overflowX: el.scrollWidth - el.clientWidth, overlaps };
+      });
+      const overflows = [...intro.querySelectorAll(
+        '.intro-title, .intro-deco, .scene-card b, .scene-season, .sd-poem, .diff-desc, .variant-note')]
+        .filter(el => el.scrollWidth > el.clientWidth + 2 || el.scrollHeight > el.clientHeight + 2)
+        .map(el => (el.className || el.tagName) + ':' + (el.innerText || '').trim().slice(0, 26));
+      return {
+        title: title ? title.innerText.replace(/\\s+/g, ' ').trim() : '',
+        titleH: title ? Math.round(rect(title).height) : 0,
+        sub: sub ? sub.innerText.trim() : '',
+        glued, panels, overflows, viewportH: window.innerHeight,
+      };
+    })()`);
+    check(/THE REGISTER/.test(face.title) && face.titleH >= 24,
+      '英文门面标题完整可见', `"${face.title}" · ${face.titleH}px`);
+    check(/gazing north to the Central Plain/.test(face.sub),
+      '门面副标题取整句精译', face.sub.slice(0, 72));
+    check(face.glued.length === 0, '无逐词直译拼接串', face.glued.join(', ') || '无');
+    check(face.overflows.length === 0, '门面文本块无溢出', face.overflows.join(' | ') || '无');
+    for (const p of face.panels) {
+      check(p.overflowX <= 2, `${p.sel} 无横向溢出`, `${p.overflowX}px`);
+      check(p.overlaps === 0, `${p.sel} 子块无重叠`, `${p.overlaps} 处`);
+      check(p.h <= face.viewportH * 0.94 + 4, `${p.sel} 高度在 94vh 内`, `${p.h}px / ${face.viewportH}px`);
+    }
 
     // 静态审计用 # 模拟插值，实机再进一次对局：动态战报、卡片说明与设置文案走真实插值路径。
     const entered = await evaluate(s, `(() => {

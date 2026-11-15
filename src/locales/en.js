@@ -34,6 +34,39 @@ export const EN_STRINGS = {
   '请在支持 WebGL 的浏览器中打开，或检查显卡加速是否开启。': 'Please open in a WebGL-capable browser, or check that hardware acceleration is on.',
   '愿执政早复旧都。': 'May the Regent restore the old capital soon.',
 
+  // Opening-page phrases that used to fall through to the word-by-word
+  // fallback. Every key is copied verbatim from its Chinese source.
+  '版<span>籍</span>': 'THE <span>REGISTER</span>',
+  '江左一隅，北望中原': 'A corner south of the Yangtze, gazing north to the Central Plain',
+  '三维舆图': 'The Paper Map',
+  '州郡、江河、山险尽在掌中': 'Prefectures, rivers and passes, all in your hands',
+  '回合军政': 'Turn-Based Statecraft',
+  '每回合数道政令，用兵先算粮': 'A few decrees each turn; count the grain before you march',
+  '朝局人心': 'Court and People',
+  '主战主和消长，牵动国运': 'War and peace factions rise and fall, and the realm with them',
+  '择 定 战 局': 'CHOOSE A CAMPAIGN',
+  '全图 · 三档国势': 'Full map · Three difficulties',
+  '蔡州／寿春 · 固定开局': 'Caizhou / Shouchun · Fixed opening',
+  '册 存档 · 三卷可续': 'Three save volumes',
+  '⟡ 托管推演 · 自动临朝直至胜负': '⟡ Autoplay · let the AI play out the whole campaign',
+  '⚙ 舆图与开局设置': '⚙ Map & game settings',
+  '原创架空设定 · 故事与数值均为本项目自有 · 同一局号可覆核整局因果 ·': 'An original setting · story and values are our own · one seed replays every consequence ·',
+  '舆 图': 'THE MAP',
+  '择关即移镜': 'picking a scenario pans the view',
+  '全图战局': 'Full Map',
+  '承平 · 春　·　全图战局': 'Chengping · Spring · Full Map',
+  '景宁元年 · 夏　·　场景战局': 'Jingning I · Summer · Scenarios',
+  '景宁元年 · 秋　·　场景战局': 'Jingning I · Autumn · Scenarios',
+  '全图二十四州郡': 'All twenty-four prefectures',
+  '吉凶参半': 'Mixed',
+  '用兵': 'Tactics',
+  '行台初立，诸军未集。整军、筹粮、平朝议，在北廷再度南下之前，把版籍一寸一寸收回来。': 'The Regency is newly founded and its armies are not yet assembled. Muster, levy, hold the Council — before the Northern Court drives south again, win the Register back prefecture by prefecture.',
+  '叶锐前军进至蔡州，北廷以重甲居中、轻骑两翼合围。平地无险可依，唯硬撼之，十二回合内断开封东南两翼。': "Ye Rui's vanguard reaches Caizhou; the Northern Court masses heavy armour at the centre and sends light horse around both flanks. Open ground offers no cover, so it must be met head-on — break the two wings south-east of Kaifeng within twelve turns.",
+  '北廷初势稍弱，仓廪充裕，朝议宽许三十八回合。': 'The Northern Court starts weaker and the granaries are full; the Council allows thirty-eight turns.',
+  '本色兵力粮账，三十回合为限，攻守最见章法。': 'Standard troops and ledger, thirty turns in all — the tier where attack and defence matter most.',
+  '景宁元年 · 夏 · 守 · 九回合 · 舆图朱批圈标出必守与必取之州': 'Jingning I · Summer · Hold · 9 turns · vermilion circles mark the prefectures to hold and to take',
+  '景宁元年 · 秋 · 攻 · 十二回合 · 舆图朱批圈标出必守与必取之州': 'Jingning I · Autumn · Attack · 12 turns · vermilion circles mark the prefectures to hold and to take',
+
   // ── 战局、难度、结局 ────────────────────────────────────────
   '北伐长局': 'The Northern Campaign',
   '寿春婴城': 'The Stand at Shouchun',
@@ -215,6 +248,8 @@ export const EN_TEMPLATES = {
   '【治略】#易主，所置屯田仓廪尽付兵燹。': '[Administration] {0} changes hands; its farms and granaries are lost to the flames.',
   '（耗军械 #，器械精利）': '(costs {0} arms; equipment honed)',
   '#本回合已点验过军伍。': '{0} has already mustered this turn.',
+  '每局另有两条随机变局（#），局号与变局均载于战报。': 'Each game also draws two random variants ({0}); seed and variants are both recorded in the dispatches.',
+  '# 处朱批焦点 · 择关即移镜': '{0} marked objectives · picking a scenario pans the view',
 };
 
 export const EN_PHRASES = {

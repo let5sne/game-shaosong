@@ -1116,3 +1116,48 @@ a:focus-visible, [tabindex]:focus-visible {
   outline: 2px solid var(--red);
   outline-offset: 2px;
 }
+
+/* English opening page: full-sentence translations are much longer than the
+   Chinese source, so the fixed letter-spacing / font sizes designed for a few
+   ideographs overflow and overlap. Scoped to html[lang="en"] only — the
+   Chinese layout is byte-for-byte unchanged. */
+html[lang="en"] .intro-deco { font-size: 9px; letter-spacing: 2px; white-space: nowrap; }
+html[lang="en"] .intro-title { font-size: clamp(26px, 2.8vw, 34px); letter-spacing: 3px; line-height: 1.45; white-space: nowrap; }
+html[lang="en"] .intro-sub { font-size: 12.5px; letter-spacing: .8px; line-height: 1.5; margin-bottom: 8px; }
+html[lang="en"] .intro-desc { font-size: 11.5px; line-height: 1.65; margin-bottom: 8px; }
+html[lang="en"] .intro-points { margin-bottom: 8px; }
+html[lang="en"] .intro-points div { padding: 6px 5px; min-width: 0; }
+html[lang="en"] .intro-points b { font-size: 10.5px; letter-spacing: 0; line-height: 1.3; overflow-wrap: anywhere; }
+html[lang="en"] .intro-points span { font-size: 9px; line-height: 1.35; overflow-wrap: anywhere; }
+html[lang="en"] .setup-label { font-size: 9px; letter-spacing: 3px; }
+html[lang="en"] .scene-season { font-size: 8px; letter-spacing: 0; }
+html[lang="en"] .scene-list { gap: 5px; margin-bottom: 8px; }
+html[lang="en"] .scene-card { padding: 6px 8px; gap: 7px; }
+html[lang="en"] .intro-setup { margin-bottom: 6px; }
+html[lang="en"] .mode-row { margin-bottom: 6px; }
+html[lang="en"] .diff-desc { margin-top: 5px; }
+html[lang="en"] .variant-note { margin-top: 2px; }
+html[lang="en"] .intro-right { gap: 12px; }
+html[lang="en"] .scene-name b { font-size: 11.5px; letter-spacing: 0; white-space: normal; line-height: 1.25; overflow-wrap: anywhere; }
+html[lang="en"] .scene-name em { font-size: 9px; letter-spacing: 0; }
+html[lang="en"] .scene-era { font-size: 9px; letter-spacing: 0; }
+html[lang="en"] .mode-btn b,
+html[lang="en"] .scenario-btn b,
+html[lang="en"] .diff-btn b { font-size: 11px; letter-spacing: 0; line-height: 1.25; overflow-wrap: anywhere; }
+html[lang="en"] .mode-btn em,
+html[lang="en"] .scenario-btn span { font-size: 8.5px; letter-spacing: 0; }
+html[lang="en"] .diff-btn span { font-size: 9px; letter-spacing: 0; }
+html[lang="en"] .diff-desc,
+html[lang="en"] .variant-note { line-height: 1.5; letter-spacing: 0; }
+html[lang="en"] .intro-map-hint { font-size: 10px; letter-spacing: 1.5px; }
+html[lang="en"] .sd-eyebrow { font-size: 9px; letter-spacing: 1px; }
+html[lang="en"] .sd-poem { font-size: 18px; letter-spacing: .5px; line-height: 1.4; margin: 8px 0 10px; }
+html[lang="en"] .sd-brief { font-size: 11.5px; line-height: 1.65; margin-bottom: 10px; }
+html[lang="en"] .sd-meta b { flex-basis: 58px; font-size: 11px; letter-spacing: 0; }
+html[lang="en"] .sd-hint { font-size: 9.5px; letter-spacing: 0; line-height: 1.5; }
+html[lang="en"] .scene-detail { padding: 14px 14px 12px; }
+html[lang="en"] .intro-actions .btn-primary.big { font-size: 15px; letter-spacing: 1px; }
+html[lang="en"] .btn-ghost,
+html[lang="en"] .intro-settings-link { letter-spacing: 0; line-height: 1.45; }
+html[lang="en"] .intro-foot { font-size: 9px; letter-spacing: 0; line-height: 1.5; color: #9a8f78; }
+html[lang="en"] .intro-lang-link { color: #c9bb9c; }

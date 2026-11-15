@@ -44,6 +44,19 @@ const TEMPLATES = Object.entries(EN_TEMPLATES)
 
 const has = (obj, k) => Object.prototype.hasOwnProperty.call(obj, k);
 
+// A few display strings split their characters across inline tags (the opening
+// title wraps its second character in a span). Translate those as a whole
+// before splitting the HTML into text nodes, otherwise the single-character
+// fallback entries swallow both characters and the whole title disappears.
+const TAGGED = Object.entries(EN_STRINGS)
+  .filter(([k]) => k.includes('<'))
+  .sort((a, b) => b[0].length - a[0].length);
+function applyTagged(text) {
+  let out = text;
+  for (const [k, v] of TAGGED) if (out.includes(k)) out = out.split(k).join(v);
+  return out;
+}
+
 /** 把取到的变量过一遍翻译后填回整句译文（人名／城名不会被漏掉）。 */
 function fillTemplate(tpl, vals) {
   return tpl.replace(/\{(\d+)\}/g, (_, i) => {
@@ -80,7 +93,9 @@ function translatePlain(text) {
 export function tx(text) {
   if (lang === 'zh' || typeof text !== 'string' || !text || !HAS_ZH.test(text)) return text;
   if (has(EN_STRINGS, text)) return EN_STRINGS[text];
-  return text.includes('<') ? text.replace(/[^<>]+/g, translatePlain) : translatePlain(text);
+  const tagged = applyTagged(text);
+  if (has(EN_STRINGS, tagged)) return EN_STRINGS[tagged];
+  return tagged.includes('<') ? tagged.replace(/[^<>]+/g, translatePlain) : translatePlain(tagged);
 }
 
 /**

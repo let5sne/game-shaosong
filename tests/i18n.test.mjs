@@ -47,6 +47,17 @@ test('英文模式：HTML 标签与插值结构不被破坏', () => {
   assert.match(t2, /Turn/i);
 });
 
+test('英文模式：带内联标签的门面整句精译优先于单字兜底', () => {
+  setLang('en');
+  assert.equal(tx('版<span>籍</span>'), 'THE <span>REGISTER</span>');
+  const inTemplate = tx('<div class="intro-title">版<span>籍</span></div><div class="intro-sub">江左一隅，北望中原</div>');
+  assert.match(inTemplate, /THE <span>REGISTER<\/span>/);
+  assert.match(inTemplate, /gazing north to the Central Plain/);
+  assert.ok(!zh(inTemplate), `门面不应残留中文：${inTemplate}`);
+  assert.equal(setLang('zh'), 'zh');
+  assert.equal(tx('版<span>籍</span>'), '版<span>籍</span>');
+});
+
 test('语言不进规则层、不进随机源、不写存档', () => {
   const rules = fs.readFileSync(new URL('../src/rules.js', import.meta.url), 'utf8');
   assert.ok(!rules.includes('i18n'), 'rules.js 不应依赖 i18n');
