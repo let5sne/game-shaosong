@@ -149,6 +149,8 @@ npm run itch:publish                      # butler 上传（需环境变量，�
 4. `.github/workflows/itch.yml` **只手动触发**，跑完整套护栏后安装包、上传，并保留一份可复核的 zip 产物；不会随 push 自动上线。
 5. **网页端收尾**（不可自动化）：首次推送后把该 channel 标记为「浏览器可玩」，设置可见性、封面、截图与定价；这些都不在 API 内。
 
+**分享链接契约**：`src/settings.js` 的 `ITCH_PAGE_URL` 是 itch 项目页地址常量。HTML5 容器里 `location.href` 指向 `html-classic.itch.zone/.../index.html`（带 build 号），游戏内「复制链接」与设置面板会经 `shareUrl()` 把当前配置参数改挂到项目页地址上；改 slug／账号时须同步这一行，与 `index.html` 的 `og:image` 同理。Pages 与本地地址不受影响。
+
 **打包契约**：`npm run itch:package` 把 `dist/` 内容作为 zip 根（`index.html` 必须在根），用 Node 内置写 store 模式 ZIP，时间戳固定，同一份 dist 每次生成的 sha256 相同。脚本还校验引用均为相对路径、无本机绝对路径、关键资源齐全、满足 itch HTML5 的文件数与体积限制（≤1000 文件、解压后 ≤500 MB、单文件 ≤200 MB、路径 ≤240 字符），并回读 zip 目录逐项自证。`vite base: './'` 的子路径契约正好适配 itch 容器。
 
 **iframe 验证**：`npm run verify:iframe` 用两个不同 host 起外层页面与游戏，构成跨源容器，实测 `?seed` / `?lang=en` 透传、`localStorage` 写入读回、`history.replaceState` 写回、三维挂载与控制台零错误；单测另覆盖存储被阻断时的静默降级。这些结论只对当前浏览器策略成立，Safari 与 itch 真实容器仍需真人实测。另需注意 `index.html` 的 `og:image` 写死 Pages 绝对地址，在 itch 上不影响运行；改仓库名或域名须同步这一行。

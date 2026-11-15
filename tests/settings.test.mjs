@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   SETTING_ITEMS, SETTING_GROUPS, readSettings, writeSetting, resetSettings,
-  encodeSearch, applyUrl, derive, knownUrlKeys, STORE_KEY, LEGACY_KEYS, settingById,
+  encodeSearch, applyUrl, shareUrl, ITCH_PAGE_URL, derive, knownUrlKeys, STORE_KEY, LEGACY_KEYS, settingById,
 } from '../src/settings.js';
 
 const makeStore = (seed = {}) => {
@@ -179,4 +179,44 @@ test('derive 派生出渲染层与开局层实际需要的字段', () => {
   assert.equal(derive({ ...defaults(), motion: 'on' }, { systemReducedMotion: true }).reducedMotion, false);
   assert.equal(derive({ ...defaults(), scenario: 'campaign' }, {}).scenario, null);
   assert.equal(derive({ ...defaults(), seed: '0' }, {}).seed, null);
+});
+
+test('分享链接：Pages 与本地地址保持自身，配置参数不丢', () => {
+  const values = { ...defaults(), quality: 'low', seed: '123456' };
+  const href = 'https://let5sne.github.io/game-shaosong/?foo=bar';
+  const out = new URL(shareUrl(values, href, ''));
+  assert.equal(out.origin + out.pathname, 'https://let5sne.github.io/game-shaosong/');
+  assert.equal(out.search, new URL(applyUrl(values, href)).search);
+  assert.equal(out.searchParams.get('foo'), 'bar');
+  assert.equal(out.searchParams.get('seed'), '123456');
+});
+
+test('分享链接：itch 容器内改用项目页地址，不带 build 缓存参数', () => {
+  const values = { ...defaults(), quality: 'low', seed: '123456' };
+  const href = 'https://html-classic.itch.zone/html/20550021-2394962/index.html?v=1794752497';
+  const out = new URL(shareUrl(values, href, 'https://let5see.itch.io/'));
+  const page = new URL(ITCH_PAGE_URL);
+  assert.equal(out.origin + out.pathname, page.origin + page.pathname);
+  assert.equal(out.searchParams.get('seed'), '123456');
+  assert.equal(out.searchParams.get('quality'), 'low');
+  assert.equal(out.searchParams.has('v'), false);
+});
+
+test('分享链接：来源页带完整路径时优先用来源页并保留其参数', () => {
+  const values = defaults();
+  const href = 'https://html-classic.itch.zone/html/20550021-2394962/index.html?v=1';
+  const out = new URL(shareUrl(values, href, 'https://let5see.itch.io/the-register?lang=en'));
+  assert.equal(out.origin + out.pathname, 'https://let5see.itch.io/the-register');
+  assert.equal(out.searchParams.get('lang'), 'en');
+  assert.equal(out.searchParams.has('v'), false);
+});
+
+test('分享链接：非法来源与 itch 主域不会劫持项目页地址', () => {
+  const values = defaults();
+  const href = 'https://html-classic.itch.zone/html/1-2/index.html';
+  const page = new URL(ITCH_PAGE_URL);
+  for (const r of ['', 'not a url', 'https://itch.io/games/like-this']) {
+    const out = new URL(shareUrl(values, href, r));
+    assert.equal(out.origin + out.pathname, page.origin + page.pathname);
+  }
 });

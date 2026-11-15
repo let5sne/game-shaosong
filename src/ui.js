@@ -18,7 +18,7 @@ import {
 } from './autoplay.js';
 import {
   SETTING_GROUPS, EFFECT_LABEL, SOURCE_LABEL, settingById,
-  applyUrl, createSettings, RESUME_KEY,
+  applyUrl, shareUrl, createSettings, RESUME_KEY,
 } from './settings.js';
 import { TEMPLATE, GUIDE_STEPS } from './ui-template.js';
 import { esc, fmtPct, signed, stat, bar, computeAlerts, settingControl, FX_TITLE } from './ui-format.js';
@@ -233,9 +233,10 @@ export function createUI(root, state, opts = {}) {
 
   function renderSettings() {
     const s = settings.values;
-    const q = new URLSearchParams(location.search).toString();
+    const link = shareUrl(s, location.href, document.referrer);
+    const q = new URL(link).search.replace(/^\?/, '');
     el.settingsUrl.textContent = tx(q ? `?${q}` : '（默认 · 无附加参数）');
-    el.settingsUrl.title = location.href;
+    el.settingsUrl.title = link;
     el.settingsBody.innerHTML = tx(SETTING_GROUPS.map(g => `
       <section class="set-group" data-group="${g.id}">
         <div class="set-group-head"><h3>${esc(g.title)}</h3><p>${esc(g.note)}</p></div>
@@ -321,7 +322,7 @@ export function createUI(root, state, opts = {}) {
   }
   async function copySettingsLink() {
     try {
-      await navigator.clipboard.writeText(location.href);
+      await navigator.clipboard.writeText(shareUrl(settings.values, location.href, document.referrer));
       toast('当前配置链接已复制，可分享复现。');
     } catch (_) {
       // 剪贴板不可用时退化为选中链接文本，用户可自行复制

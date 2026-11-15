@@ -333,6 +333,38 @@ export function applyUrl(values, href) {
   return u.href;
 }
 
+/** 发行页地址：itch HTML5 容器里的 location.href 是 CDN 内部地址，不能直接拿去分享。
+ *  改 slug／域名时须同步这一行（与 index.html 的 og:image 同理）。 */
+export const ITCH_PAGE_URL = 'https://let5see.itch.io/the-register';
+
+/**
+ * 生成可分享的链接：把当前配置参数搬到项目页地址上。
+ * 只在 itch 的 CDN 容器内改写，Pages 与本地开发保持自身地址。
+ * referrer 由调用方传入（本模块保持无 DOM 依赖）：跨站 iframe 通常只有
+ * origin 而无路径，此时回退到 ITCH_PAGE_URL。
+ */
+export function shareUrl(values, href, referrer = '') {
+  const full = new URL(applyUrl(values, href));
+  if (!full.hostname.endsWith('itch.zone')) return full.href;
+  let base = ITCH_PAGE_URL;
+  let refSearch = '';
+  try {
+    const r = new URL(referrer);
+    if (/^https?:$/.test(r.protocol) && r.hostname.endsWith('.itch.io')
+      && r.pathname.replace(/\/+$/, '').length > 1) {
+      base = `${r.origin}${r.pathname.replace(/\/+$/, '')}`;
+      refSearch = r.search;
+    }
+  } catch (_) { /* 无来源页时沿用已知项目页 */ }
+  const u = new URL(base);
+  const p = new URLSearchParams(refSearch);
+  for (const [k, v] of full.searchParams) p.set(k, v);
+  p.delete('v'); // itch 注入的 build 缓存参数，不随分享链接走
+  u.search = p.toString();
+  u.hash = '';
+  return u.href;
+}
+
 /**
  * 派生出 main.js / world.js 真正需要的老字段。
  * env: { systemReducedMotion, autoQuality }
